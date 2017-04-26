@@ -93,5 +93,6 @@ int osmo_gettimeofday(struct timeval *tv, struct timezone *tz);
 extern bool osmo_gettimeofday_override;
 extern struct timeval osmo_gettimeofday_override_time;
 void osmo_gettimeofday_override_add(time_t secs, suseconds_t usecs);
+void osmo_gettimeofday_override_accel_factor(unsigned int factor);
 
 /*! @} */

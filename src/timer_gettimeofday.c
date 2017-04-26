@@ -27,23 +27,39 @@
 /*! \file timer_gettimeofday.c
  */
 
+#include <stdlib.h>
 #include <stdbool.h>
 #include <sys/time.h>
 
+
 bool osmo_gettimeofday_override = false;
+
 struct timeval osmo_gettimeofday_override_time = { 23, 424242 };
+
+static unsigned int osmo_gettimeofday_factor = 0;
 
 /*! \brief shim around gettimeofday to be able to set the time manually.
  * To override, set osmo_gettimeofday_override == true and set the desired
  * current time in osmo_gettimeofday_override_time. */
 int osmo_gettimeofday(struct timeval *tv, struct timezone *tz)
 {
-	if (osmo_gettimeofday_override) {
+	struct timeval now, diff1, diff2;
+
+	if (!osmo_gettimeofday_override)
+		return gettimeofday(tv, tz);
+
+	if (!osmo_gettimeofday_factor) {
 		*tv = osmo_gettimeofday_override_time;
-		return 0;
+	} else {
+		gettimeofday(&now, NULL);
+		timersub(&now, &osmo_gettimeofday_override_time, &diff1);
+		diff2.tv_usec = (diff1.tv_usec * osmo_gettimeofday_factor) % 1000000;
+		diff2.tv_sec = diff1.tv_sec * osmo_gettimeofday_factor +
+				(diff1.tv_usec * osmo_gettimeofday_factor) / 1000000;
+		timeradd(&osmo_gettimeofday_override_time, &diff2, tv);
 	}
 
-	return gettimeofday(tv, tz);
+	return 0;
 }
 
 /*! \brief convenience function to advance the fake time.
@@ -53,6 +69,14 @@ void osmo_gettimeofday_override_add(time_t secs, suseconds_t usecs)
 	struct timeval val = { secs, usecs };
 	timeradd(&osmo_gettimeofday_override_time, &val,
 		 &osmo_gettimeofday_override_time);
+}
+
+/*! \brief convenience function to make time advance faster, at a x<factor> rate.
+ * Setting factor to 0 disables the feature. */
+void osmo_gettimeofday_override_accel_factor(unsigned int factor)
+{
+	gettimeofday(&osmo_gettimeofday_override_time, NULL);
+	osmo_gettimeofday_factor = factor;
 }
 
 /*! @} */
