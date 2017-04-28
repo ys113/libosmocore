@@ -104,7 +104,7 @@ int gsm0808_dec_aoip_trasp_addr(struct sockaddr_storage *ss,
 	OSMO_ASSERT(ss);
 	if (!elem)
 		return -EINVAL;
-	if (len <= 0)
+	if (len == 0)
 		return -EINVAL;
 
 	memset(ss, 0, sizeof(*ss));
@@ -187,6 +187,7 @@ static uint8_t enc_speech_codec(struct msgb *msg,
 uint8_t gsm0808_enc_speech_codec(struct msgb *msg,
 				 const struct gsm0808_speech_codec *sc)
 {
+	/* See also 3GPP TS 48.008 3.2.2.103 Speech Codec List */
 	uint8_t *old_tail;
 	uint8_t *tlv_len;
 
@@ -218,7 +219,7 @@ int gsm0808_dec_speech_codec(struct gsm0808_speech_codec *sc,
 	OSMO_ASSERT(sc);
 	if (!elem)
 		return -EINVAL;
-	if (len <= 0)
+	if (len == 0)
 		return -EINVAL;
 
 	memset(sc, 0, sizeof(*sc));
@@ -270,6 +271,7 @@ int gsm0808_dec_speech_codec(struct gsm0808_speech_codec *sc,
 uint8_t gsm0808_enc_speech_codec_list(struct msgb *msg,
 				      const struct gsm0808_speech_codec_list *scl)
 {
+	/* See also 3GPP TS 48.008 3.2.2.103 Speech Codec List */
 	uint8_t *old_tail;
 	uint8_t *tlv_len;
 	unsigned int i;
@@ -305,6 +307,7 @@ uint8_t gsm0808_enc_speech_codec_list(struct msgb *msg,
 int gsm0808_dec_speech_codec_list(struct gsm0808_speech_codec_list *scl,
 				  const uint8_t *elem, uint8_t len)
 {
+	/* See also 3GPP TS 48.008 3.2.2.103 Speech Codec List */
 	const uint8_t *old_elem = elem;
 	unsigned int i;
 	int rc;
@@ -313,7 +316,7 @@ int gsm0808_dec_speech_codec_list(struct gsm0808_speech_codec_list *scl,
 	OSMO_ASSERT(scl);
 	if (!elem)
 		return -EINVAL;
-	if (len <= 0)
+	if (len == 0)
 		return -EINVAL;
 
 	memset(scl, 0, sizeof(*scl));
@@ -348,6 +351,7 @@ int gsm0808_dec_speech_codec_list(struct gsm0808_speech_codec_list *scl,
 uint8_t gsm0808_enc_channel_type(struct msgb *msg,
 				 const struct gsm0808_channel_type *ct)
 {
+	/* See also 3GPP TS 48.008 3.2.2.11 Channel Type */
 	unsigned int i;
 	uint8_t byte;
 	uint8_t *old_tail;
@@ -390,6 +394,7 @@ uint8_t gsm0808_enc_channel_type(struct msgb *msg,
 int gsm0808_dec_channel_type(struct gsm0808_channel_type *ct,
 			     const uint8_t *elem, uint8_t len)
 {
+	/* See also 3GPP TS 48.008 3.2.2.11 Channel Type */
 	unsigned int i;
 	uint8_t byte;
 	const uint8_t *old_elem = elem;
@@ -397,7 +402,7 @@ int gsm0808_dec_channel_type(struct gsm0808_channel_type *ct,
 	OSMO_ASSERT(ct);
 	if (!elem)
 		return -EINVAL;
-	if (len <= 0)
+	if (len < 3 || len > 11)
 		return -EINVAL;
 
 	memset(ct, 0, sizeof(*ct));
@@ -473,7 +478,7 @@ int gsm0808_dec_encrypt_info(struct gsm0808_encrypt_info *ei,
 	OSMO_ASSERT(ei);
 	if (!elem)
 		return -EINVAL;
-	if (len <= 0)
+	if (len == 0)
 		return -EINVAL;
 
 	memset(ei, 0, sizeof(*ei));
@@ -550,7 +555,7 @@ int gsm0808_dec_cell_id_list(struct gsm0808_cell_id_list *cil,
 	OSMO_ASSERT(cil);
 	if (!elem)
 		return -EINVAL;
-	if (len <= 0)
+	if (len == 0)
 		return -EINVAL;
 
 	memset(cil, 0, sizeof(*cil));
