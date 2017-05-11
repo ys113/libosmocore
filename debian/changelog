@@ -1,3 +1,9 @@
+libosmocore (0.9.6-fw.2) unstable; urgency=medium
+
+  * lapd_core: Fix crash in lapd_est_req() function
+
+ -- Ivan Klyuchnikov <kluchnikovi@gmail.com>  Thu, 11 May 2017 15:46:33 +0200
+
 libosmocore (0.9.6-fw.1) unstable; urgency=medium
 
   * New release of libosmocore for fairwaves build.
