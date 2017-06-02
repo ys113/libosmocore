@@ -750,4 +750,55 @@ int gsm0808_convert_to_speech_codec_type(uint8_t perm_spch)
 	return -EINVAL;
 }
 
+/* Extrapolate a speech codec field from a given permitted speech parameter */
+int gsm0808_extrapolate_speech_codec(struct gsm0808_speech_codec *sc,
+				     uint8_t perm_spch)
+{
+	/* Note: This function accepts the permitted speech configuration
+	 * from the channel type information and computes an AoIP speech
+	 * codec that field that consistantly matches the channel type
+	 * configuration. This will basically reflect a non-transcoding-
+	 * situation. (In transcoding scenarios, the codec used in the RTP
+	 * stream may be differ from the codec used on the air interface) */
+
+	int rc;
+
+	memset(sc, 0, sizeof(*sc));
+
+	/* Determine codec type */
+	rc = gsm0808_convert_to_speech_codec_type(perm_spch);
+	if (rc < 0)
+		return -EINVAL;
+	sc->type = (uint8_t) rc;
+
+	/* Depending on the, pick a default codc configuration, that
+	 * exactly matches the configuration on the air interface. */
+	switch (sc->type) {
+	case GSM0808_SCT_FR3:
+		sc->cfg = GSM0808_SC_CFG_DEFAULT_FR_AMR;
+		break;
+	case GSM0808_SCT_FR4:
+		sc->cfg = GSM0808_SC_CFG_DEFAULT_OFR_AMR_WB;
+		break;
+	case GSM0808_SCT_FR5:
+		sc->cfg = GSM0808_SC_CFG_DEFAULT_FR_AMR_WB;
+		break;
+	case GSM0808_SCT_HR3:
+		sc->cfg = GSM0808_SC_CFG_DEFAULT_HR_AMR;
+		break;
+	case GSM0808_SCT_HR4:
+		sc->cfg = GSM0808_SC_CFG_DEFAULT_OHR_AMR_WB;
+		break;
+	case GSM0808_SCT_HR6:
+		sc->cfg = GSM0808_SC_CFG_DEFAULT_OHR_AMR;
+		break;
+	}
+
+	/* Tag all codecs as "Full IP"
+	 * (see als 3GPP TS 48.008 3.2.2.103) */
+	sc->fi = true;
+
+	return 0;
+}
+
 /*! @} */

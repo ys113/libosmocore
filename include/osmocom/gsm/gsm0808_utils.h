@@ -76,3 +76,7 @@ int gsm0808_dec_cell_id_list(struct gsm0808_cell_id_list *cil,
  * that is used in struct gsm0808_channel_type to the speech codec
  * representation we use in struct gsm0808_speech_codec */
 int gsm0808_convert_to_speech_codec_type(uint8_t perm_spch);
+
+/* Extrapolate a speech codec field from a given permitted speech parameter */
+int gsm0808_extrapolate_speech_codec(struct gsm0808_speech_codec *sc,
+				     uint8_t perm_spch);
