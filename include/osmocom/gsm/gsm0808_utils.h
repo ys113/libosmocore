@@ -71,3 +71,8 @@ uint8_t gsm0808_enc_cell_id_list(struct msgb *msg,
 /* Decode Cell Identifier List element */
 int gsm0808_dec_cell_id_list(struct gsm0808_cell_id_list *cil,
 			     const uint8_t *elem, uint8_t len);
+
+/* Convert the representation of the permitted speech codec identifier
+ * that is used in struct gsm0808_channel_type to the speech codec
+ * representation we use in struct gsm0808_speech_codec */
+int gsm0808_convert_to_speech_codec_type(uint8_t perm_spch);
