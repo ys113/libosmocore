@@ -49,6 +49,25 @@ Boston, MA  02110-1301, USA. */
 
 #define CONFIGFILE_MASK 022
 
+void print_str(const char *str)
+{
+	if (!str) {
+		printf("NULL\n");
+		return;
+	}
+	printf("'");
+	while (str && *str) {
+		if (*str == '\t') printf("\\t");
+		else
+		if (*str == '\n') printf("\\n");
+		else
+			printf("%c", *str);
+		str++;
+	}
+	printf("'\n");
+}
+
+
 void *tall_vty_cmd_ctx;
 
 /* Command vector which includes some level of command lists. Normally
@@ -2040,14 +2059,18 @@ static struct vty_parent_node *vty_parent(struct vty *vty)
 static bool vty_pop_parent(struct vty *vty)
 {
 	struct vty_parent_node *parent = vty_parent(vty);
-	if (!parent)
+	if (!parent) {
+		printf("vty_pop_parent() returns false, vty->node unchanged = %d\n", vty->node);
 		return false;
+	}
+	printf("vty_pop_parent() on vty->node = %d\n", vty->node);
 	llist_del(&parent->entry);
 	vty->node = parent->node;
 	vty->priv = parent->priv;
 	if (vty->indent)
 		talloc_free(vty->indent);
 	vty->indent = parent->indent;
+	printf("vty->indent: "); print_str(vty->indent);
 	talloc_free(parent);
 	return true;
 }
@@ -2074,6 +2097,7 @@ static void vty_clear_parents(struct vty *vty)
  */
 int vty_go_parent(struct vty *vty)
 {
+	printf("vty_go_parent() vty->node = %d\n", vty->node);
 	switch (vty->node) {
 		case AUTH_NODE:
 		case VIEW_NODE:
@@ -2096,14 +2120,17 @@ int vty_go_parent(struct vty *vty)
 		default:
 			if (host.app_info->go_parent_cb) {
 				host.app_info->go_parent_cb(vty);
+				printf("called go_parent_cb(), vty->node = %d\n", vty->node);
 				vty_pop_parent(vty);
 			}
 			else if (is_config_child(vty)) {
 				vty->node = CONFIG_NODE;
+				printf("is_config_child() returned true, vty->node = CONFIG_NODE = %d\n", vty->node);
 				vty_clear_parents(vty);
 			}
 			else {
 				vty->node = VIEW_NODE;
+				printf("is_config_child() returned false, vty->node = VIEW_NODE = %d\n", vty->node);
 				vty_clear_parents(vty);
 			}
 			break;
@@ -2380,7 +2407,7 @@ static inline size_t len(const char *str)
  * is longer than b, a must start with exactly b, and vice versa.
  * \returns EINVAL on mismatch, -1 for a < b, 0 for a == b, 1 for a > b.
  */
-static int indent_cmp(const char *a, const char *b)
+static int _indent_cmp(const char *a, const char *b)
 {
 	size_t al, bl;
 	al = len(a);
@@ -2395,7 +2422,18 @@ static int indent_cmp(const char *a, const char *b)
 		return EINVAL;
 	return (al < bl)? -1 : 0;
 }
-
+static int __indent_cmp(const char *a, const char *b, const char *a_literal, const char *b_literal)
+{
+	int cmp;
+	printf("indent_cmp(%s, %s)\n", a_literal, b_literal);
+	printf("a: "); print_str(a);
+	printf("b: "); print_str(b);
+	cmp = _indent_cmp(a, b);
+	printf("cmp = %d\n", cmp);
+	return cmp;
+}
+#define indent_cmp(a,b) __indent_cmp(a, b, #a, #b)
+	
 /* Configration make from file. */
 int config_from_file(struct vty *vty, FILE * fp)
 {
@@ -2405,11 +2443,17 @@ int config_from_file(struct vty *vty, FILE * fp)
 	int cmp;
 	struct vty_parent_node this_node;
 	struct vty_parent_node *parent;
+	printf("start\n");
+	printf("CONFIG_NODE = %d\n", CONFIG_NODE);
 
 	while (fgets(vty->buf, VTY_BUFSIZ, fp)) {
 		indent = NULL;
 		vline = NULL;
 		ret = cmd_make_strvec2(vty->buf, &indent, &vline);
+		printf("\n\nvty->node = %d\n", vty->node);
+		printf("line: "); print_str(vty->buf);
+		printf("indent: "); print_str(indent);
+		printf("vty->indent: "); print_str(vty->indent);
 
 		if (ret != CMD_SUCCESS)
 			goto return_invalid_indent;
@@ -2429,6 +2473,8 @@ int config_from_file(struct vty *vty, FILE * fp)
 			 * may also skip right back to a parent or ancestor level. */
 			parent = vty_parent(vty);
 
+			printf("!vty->indent; parent->indent: "); print_str(parent? parent->indent : NULL);
+
 			/* If there is no parent, record any indentation we encounter. */
 			cmp = parent ? indent_cmp(indent, parent->indent) : 1;
 
@@ -2441,6 +2487,7 @@ int config_from_file(struct vty *vty, FILE * fp)
 				 * that was actually there (to reinstate vty->indent) and re-use below
 				 * go-parent while-loop to find an accurate match of indent in the node
 				 * ancestry. */
+				printf("skipping child level\n");
 				vty_go_parent(vty);
 			} else {
 				/* The indent is deeper than the just entered parent, record the new
@@ -2448,6 +2495,7 @@ int config_from_file(struct vty *vty, FILE * fp)
 				vty->indent = talloc_strdup(vty, indent);
 				/* This *is* the new indentation. */
 				cmp = 0;
+				printf("remember indent: vty->indent: "); print_str(vty->indent);
 			}
 		} else {
 			/* There is a known indentation for this node level, validate and detect node
@@ -2498,9 +2546,11 @@ int config_from_file(struct vty *vty, FILE * fp)
 		 * a parent node. Hence if the node changed without the parent node changing, we must
 		 * have stepped into a child node (and now expect a deeper indent). */
 		if (vty->node != this_node.node && parent == vty_parent(vty)) {
+			printf("push parent\n");
 			/* Push the parent node. */
 			parent = talloc_zero(vty, struct vty_parent_node);
 			*parent = this_node;
+			printf("parent->indent: "); print_str(parent->indent);
 			llist_add(&parent->entry, &vty->parent_nodes);
 
 			/* The current talloc'ed vty->indent string will now be owned by this parent
@@ -2517,6 +2567,7 @@ int config_from_file(struct vty *vty, FILE * fp)
 	return CMD_SUCCESS;
 
 return_invalid_indent:
+	printf("invalid indent");
 	if (vline)
 		cmd_free_strvec(vline);
 	if (indent) {
