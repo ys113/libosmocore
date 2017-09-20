@@ -2134,6 +2134,26 @@ int vty_go_parent(struct vty *vty)
 				vty_clear_parents(vty);
 			}
 			break;
+#if 0
+			if (host.app_info->go_parent_cb)
+				host.app_info->go_parent_cb(vty);
+			if (!vty_pop_parent(vty)) {
+				printf("vty_pop_parent() returned false, vty->node = %d\n", vty->node);
+				if (is_config_child(vty)) {
+					vty->node = CONFIG_NODE;
+					printf("is_config_child() returned true, vty->node = CONFIG_NODE = %d\n", vty->node);
+					vty_clear_parents(vty);
+				}
+				else {
+					vty->node = VIEW_NODE;
+					printf("is_config_child() returned false, vty->node = VIEW_NODE = %d\n", vty->node);
+					vty_clear_parents(vty);
+				}
+			}
+			else
+				printf("vty_pop_parent() returned true, vty->node = %d\n", vty->node);
+			break;
+#endif
 	}
 
 	return vty->node;
