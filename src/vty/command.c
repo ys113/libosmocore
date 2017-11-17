@@ -2089,6 +2089,11 @@ static void vty_clear_parents(struct vty *vty)
  */
 int vty_go_parent(struct vty *vty)
 {
+	struct cmd_node *cnode = vector_slot(cmdvec, vty->node);
+
+	if (cnode->exit_cb)
+		cnode->exit_cb(vty);
+
 	switch (vty->node) {
 		case AUTH_NODE:
 		case VIEW_NODE:

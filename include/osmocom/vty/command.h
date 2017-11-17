@@ -130,6 +130,9 @@ struct cmd_node {
 	 * plus '-' and '_' characters (is used as XML ID for 'show
 	 * online-help'). If left NUL, this is derived from the prompt.*/
 	char name[64];
+
+	/*! Node's exit call-back function */
+	void (*exit_cb) (struct vty *);
 };
 
 enum {
