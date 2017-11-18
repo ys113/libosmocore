@@ -178,21 +178,29 @@ static void fsm_tmr_cb(void *data)
 	struct osmo_fsm_inst *fi = data;
 	struct osmo_fsm *fsm = fi->fsm;
 	uint32_t T = fi->T;
+	/* Must not access fi after calling the timer cb, since that may have effected an fi termination
+	 * and deallocation, e.g. from dispatching events and/or complex choices made. So set T=0 now,
+	 * before calling the timer_cb. */
+	fi->T = 0;
 
-	LOGPFSM(fi, "Timeout of T%u\n", fi->T);
+	LOGPFSM(fi, "Timeout of T%u\n", T);
 
 	if (fsm->timer_cb) {
 		int rc = fsm->timer_cb(fi);
 		if (rc != 1) {
-			fi->T = 0;
 			return;
 		}
 		LOGPFSM(fi, "timer_cb requested termination\n");
+	} else if (fsm->timer_cb2) {
+		int rc = fsm->timer_cb2(fi, T);
+		if (rc != 1) {
+			return;
+		}
+		LOGPFSM(fi, "timer_cb2 requested termination\n");
 	} else
 		LOGPFSM(fi, "No timer_cb, automatic termination\n");
 
 	/* if timer_cb returns 1 or there is no timer_cb */
-	fi->T = 0;
 	osmo_fsm_inst_term(fi, OSMO_FSM_TERM_TIMEOUT, &T);
 }
 

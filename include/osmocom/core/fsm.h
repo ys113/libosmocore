@@ -72,12 +72,18 @@ struct osmo_fsm {
 	/*! clean-up function, called during termination */
 	void (*cleanup)(struct osmo_fsm_inst *fi, enum osmo_fsm_term_cause cause);
 	/*! timer call-back for states with time-out.
+	 * Note that fi->T has already been reset to 0 before calling.
+	 * See also timer_cb2(). You should never use both timer_cb and timer_cb2().
 	 * \returns 1 to request termination, 0 to keep running. */
 	int (*timer_cb)(struct osmo_fsm_inst *fi);
 	/*! logging sub-system for this FSM */
 	int log_subsys;
 	/*! human-readable names of events */
 	const struct value_string *event_names;
+	/*! timer call-back for states with time-out.
+	 * Like timer_cb(), but also gets passed the expired T timer.
+	 * \returns 1 to request termination, 0 to keep running. */
+	int (*timer_cb2)(struct osmo_fsm_inst *fi, uint32_t T);
 };
 
 /*! a single instanceof an osmocom finite state machine */
