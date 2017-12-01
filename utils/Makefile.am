@@ -5,7 +5,7 @@ LDADD = $(top_builddir)/src/libosmocore.la $(top_builddir)/src/gsm/libosmogsm.la
 
 EXTRA_DIST = conv_gen.py conv_codes_gsm.py
 
-bin_PROGRAMS = osmo-arfcn osmo-auc-gen osmo-config-merge
+bin_PROGRAMS = osmo-arfcn osmo-auc-gen osmo-config-merge osmo-prbs-tool
 
 osmo_arfcn_SOURCES = osmo-arfcn.c
 
@@ -14,6 +14,10 @@ osmo_auc_gen_SOURCES = osmo-auc-gen.c
 osmo_config_merge_SOURCES = osmo-config-merge.c
 osmo_config_merge_LDADD = $(LDADD) $(TALLOC_LIBS)
 osmo_config_merge_CFLAGS = $(TALLOC_CFLAGS)
+
+osmo_prbs_tool_SOURCES = prbs-tool.c
+osmo_prbs_tool_LDADD = $(LDADD) $(top_builddir)/src/coding/libosmocoding.la
+
 
 if ENABLE_PCSC
 noinst_PROGRAMS = osmo-sim-test
