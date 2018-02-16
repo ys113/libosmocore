@@ -5,11 +5,13 @@ LDADD = $(top_builddir)/src/libosmocore.la $(top_builddir)/src/gsm/libosmogsm.la
 
 EXTRA_DIST = conv_gen.py conv_codes_gsm.py
 
-bin_PROGRAMS = osmo-arfcn osmo-auc-gen
+bin_PROGRAMS = osmo-arfcn osmo-auc-gen osmo-gsmtap-sink
 
 osmo_arfcn_SOURCES = osmo-arfcn.c
 
 osmo_auc_gen_SOURCES = osmo-auc-gen.c
+
+osmo_gsmtap_sink_SOURCES = osmo-gsmtap-sink.c
 
 if ENABLE_PCSC
 noinst_PROGRAMS = osmo-sim-test
