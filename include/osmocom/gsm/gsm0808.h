@@ -126,6 +126,10 @@ struct msgb *gsm0808_create_handover_request_ack(const uint8_t *l3_info, uint8_t
 						 uint8_t chosen_channel, uint8_t chosen_encr_alg,
 						 uint8_t chosen_speech_version);
 
+struct gsm0808_handover_detected {
+};
+struct msgb *gsm0808_create_handover_detected(const struct gsm0808_handover_detected *params);
+
 struct msgb *gsm0808_create_dtap(struct msgb *msg, uint8_t link_id);
 void gsm0808_prepend_dtap_header(struct msgb *msg, uint8_t link_id);
 
