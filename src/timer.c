@@ -39,8 +39,16 @@
 #include <osmocom/core/timer_compat.h>
 #include <osmocom/core/linuxlist.h>
 
-static int get_time(struct timeval *now)
+int get_time(struct timeval *now)
 {
+	struct timespec ts;
+
+	osmo_clock_gettime(CLOCK_MONOTONIC, &ts);
+	now = (struct timeval){
+		.tv_sec = ts.ts_sec,
+		.tv_usec = ts.ts_nsec / 1000,
+	};
+	if (ts.ts_nsec % 1000)
 	return osmo_gettimeofday(&now, NULL);
 }
 
