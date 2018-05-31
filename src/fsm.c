@@ -436,6 +436,7 @@ static int state_chg(struct osmo_fsm_inst *fi, uint32_t new_state,
 	struct osmo_fsm *fsm = fi->fsm;
 	uint32_t old_state = fi->state;
 	const struct osmo_fsm_state *st = &fsm->states[fi->state];
+	struct timeval remaining;
 
 	/* validate if new_state is a valid state */
 	if (!(st->out_state_mask & (1 << new_state))) {
@@ -453,8 +454,18 @@ static int state_chg(struct osmo_fsm_inst *fi, uint32_t new_state,
 	if (st->onleave)
 		st->onleave(fi, new_state);
 
-	LOGPFSMSRC(fi, file, line, "state_chg to %s\n",
-		   osmo_fsm_state_name(fsm, new_state));
+	if (keep_timer && fi->timer.active && (osmo_timer_remaining(&fi->timer, NULL, &remaining) == 0))
+		LOGPFSMSRC(fi, file, line, "State change to %s (keeping T%d, %ld.%03lds remaining)\n",
+			   osmo_fsm_state_name(fsm, new_state),
+			   fi->T, remaining.tv_sec, remaining.tv_usec / 1000);
+	else if (timeout_secs && !keep_timer)
+		LOGPFSMSRC(fi, file, line, "State change to %s (T%d, %lus)\n",
+			   osmo_fsm_state_name(fsm, new_state),
+			   T, timeout_secs);
+	else
+		LOGPFSMSRC(fi, file, line, "State change to %s (no timeout)\n",
+			   osmo_fsm_state_name(fsm, new_state));
+
 	fi->state = new_state;
 	st = &fsm->states[new_state];
 
