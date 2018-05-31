@@ -148,6 +148,12 @@ int osmo_timer_pending(struct osmo_timer_list *timer)
  *
  *  This function can be used to determine the amount of time
  *  remaining until the expiration of the timer.
+ *
+ *  Note: If the timer has already expired, the remaining time returned reflects
+ *  a negative value, but this is *not* the accurate time since the timer should
+ *  have fired. Rather, it is the negative time since expiry with tv_usec
+ *  decremented one second. This is an implementation detail to ensure a
+ *  negative sign even for fractional values. See timersub.
  */
 int osmo_timer_remaining(const struct osmo_timer_list *timer,
 			 const struct timeval *now,
