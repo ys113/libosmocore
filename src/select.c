@@ -235,7 +235,7 @@ int osmo_select_main(int polling)
 {
 	fd_set readset, writeset, exceptset;
 	int rc;
-	struct timeval no_time = {0, 0};
+	struct timespec no_time = {0, 0};
 
 	FD_ZERO(&readset);
 	FD_ZERO(&writeset);
@@ -246,7 +246,8 @@ int osmo_select_main(int polling)
 
 	if (!polling)
 		osmo_timers_prepare();
-	rc = select(maxfd+1, &readset, &writeset, &exceptset, polling ? &no_time : osmo_timers_nearest());
+	rc = pselect(maxfd+1, &readset, &writeset, &exceptset,
+		     polling ? &no_time : osmo_timers_nearest(), NULL);
 	if (rc < 0)
 		return 0;
 

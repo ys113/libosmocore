@@ -13,21 +13,22 @@
 #include <osmocom/core/utils.h>
 #include <osmocom/core/logging.h>
 #include <osmocom/core/talloc.h>
+#include <osmocom/core/timer_compat.h>
 #include <osmocom/gprs/gprs_bssgp.h>
 
 static unsigned long in_ctr = 1;
-static struct timeval tv_start;
+static struct timespec ts_start;
 void *ctx = NULL;
 
 int get_centisec_diff(void)
 {
-	struct timeval tv;
-	struct timeval now;
-	osmo_gettimeofday(&now, NULL);
+	struct timespec ts;
+	struct timespec now;
+	osmo_clock_gettime(CLOCK_MONOTONIC, &now);
 
-	timersub(&now, &tv_start, &tv);
+	timespecsub(&now, &ts_start, &ts);
 
-	return tv.tv_sec * 100 + tv.tv_usec/10000;
+	return ts.tv_sec * 100 + ts.tv_nsec/10000000;
 }
 
 static int fc_out_cb(struct bssgp_flow_control *fc, struct msgb *msg,
@@ -74,17 +75,19 @@ static void test_fc(uint32_t bucket_size_max, uint32_t bucket_leak_rate,
 {
 	struct bssgp_flow_control *fc = talloc_zero(ctx, struct bssgp_flow_control);
 	int i;
+	struct timespec *now;
+	osmo_clock_override_enable(CLOCK_MONOTONIC, true);
+	now = osmo_clock_override_gettimespec(CLOCK_MONOTONIC);
 
-	osmo_gettimeofday_override_time = (struct timeval){
+	*now = (struct timespec){
 		.tv_sec = 1486385000,
-		.tv_usec = 423423,
+		.tv_nsec = 423423423,
 	};
-	osmo_gettimeofday_override = true;
 
 	bssgp_fc_init(fc, bucket_size_max, bucket_leak_rate, max_queue_depth,
 		      fc_out_cb);
 
-	osmo_gettimeofday(&tv_start, NULL);
+	osmo_clock_gettime(CLOCK_MONOTONIC, &ts_start);
 
 	/* Fill the queue with PDUs, possibly beyond the queue being full. If it is full, additional PDUs
 	 * are discarded. */
@@ -96,7 +99,7 @@ static void test_fc(uint32_t bucket_size_max, uint32_t bucket_leak_rate,
 	}
 
 	while (1) {
-		osmo_gettimeofday_override_add(0, 100000);
+		osmo_clock_override_add(CLOCK_MONOTONIC, 0, 100000000L);
 
 		osmo_timers_check();
 		osmo_timers_prepare();

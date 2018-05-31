@@ -39,22 +39,14 @@
 #include <osmocom/core/timer_compat.h>
 #include <osmocom/core/linuxlist.h>
 
-int get_time(struct timeval *now)
+static int osmo_timer_now(struct timespec *now)
 {
-	struct timespec ts;
-
-	osmo_clock_gettime(CLOCK_MONOTONIC, &ts);
-	now = (struct timeval){
-		.tv_sec = ts.ts_sec,
-		.tv_usec = ts.ts_nsec / 1000,
-	};
-	if (ts.ts_nsec % 1000)
-	return osmo_gettimeofday(&now, NULL);
+	return osmo_clock_gettime(CLOCK_MONOTONIC, now);
 }
 
 /* These store the amount of time that we wait until next timer expires. */
-static struct timeval nearest;
-static struct timeval *nearest_p;
+static struct timespec nearest;
+static struct timespec *nearest_p;
 
 static struct rb_root timer_root = RB_ROOT;
 
@@ -69,7 +61,7 @@ static void __add_timer(struct osmo_timer_list *timer)
 		this = container_of(*new, struct osmo_timer_list, node);
 
 		parent = *new;
-		if (timercmp(&timer->timeout, &this->timeout, <))
+		if (timespeccmp(&timer->timeout_at, &this->timeout_at, <))
 			new = &((*new)->rb_left);
 		else
 			new = &((*new)->rb_right);
@@ -115,12 +107,12 @@ void osmo_timer_add(struct osmo_timer_list *timer)
 void
 osmo_timer_schedule(struct osmo_timer_list *timer, int seconds, int microseconds)
 {
-	struct timeval current_time;
+	struct timespec current_time;
 
-	get_time(&current_time);
-	timer->timeout.tv_sec = seconds;
-	timer->timeout.tv_usec = microseconds;
-	timeradd(&timer->timeout, &current_time, &timer->timeout);
+	osmo_timer_now(&current_time);
+	timer->timeout_at.tv_sec = seconds;
+	timer->timeout_at.tv_nsec = microseconds * 1000;
+	timespecadd(&timer->timeout_at, &current_time, &timer->timeout_at);
 	osmo_timer_add(timer);
 }
 
@@ -172,30 +164,35 @@ int osmo_timer_remaining(const struct osmo_timer_list *timer,
 			 const struct timeval *now,
 			 struct timeval *remaining)
 {
-	struct timeval current_time;
+	struct timespec remaining_ts;
+	int rc = osmo_timer_remaining2(timer, &remaining_ts);
+	*remaining = (struct timeval){
+		.tv_sec = remaining_ts.tv_sec,
+		.tv_usec = remaining_ts.tv_nsec / 1000,
+	};
+	return rc;
+}
 
-	if (!now)
-		get_time(&current_time);
-	else
-		current_time = *now;
-
-	timersub(&timer->timeout, &current_time, remaining);
-
+int osmo_timer_remaining2(const struct osmo_timer_list *timer,
+			  struct timespec *remaining)
+{
+	struct timespec current_time;
+	osmo_timer_now(&current_time);
+	timespecsub(&timer->timeout_at, &current_time, remaining);
 	if (remaining->tv_sec < 0)
 		return -1;
-
 	return 0;
 }
 
 /*! Determine time between now and the nearest timer
- *  \returns pointer to timeval of nearest timer, NULL if there is none
+ *  \returns pointer to timespec of nearest timer, NULL if there is none
  *
  * if we have a nearest time return the delta between the current
  * time and the time of the nearest timer.
  * If the nearest timer timed out return NULL and then we will
  * dispatch everything after the select
  */
-struct timeval *osmo_timers_nearest(void)
+struct timespec *osmo_timers_nearest(void)
 {
 	/* nearest_p is exactly what we need already: NULL if nothing is
 	 * waiting, {0,0} if we must dispatch immediately, and the correct
@@ -203,14 +200,14 @@ struct timeval *osmo_timers_nearest(void)
 	return nearest_p;
 }
 
-static void update_nearest(struct timeval *cand, struct timeval *current)
+static void update_nearest(struct timespec *cand, struct timespec *current)
 {
 	if (cand->tv_sec != LONG_MAX) {
-		if (timercmp(cand, current, >))
-			timersub(cand, current, &nearest);
+		if (timespeccmp(cand, current, >))
+			timespecsub(cand, current, &nearest);
 		else {
 			/* loop again inmediately */
-			timerclear(&nearest);
+			timespecclear(&nearest);
 		}
 		nearest_p = &nearest;
 	} else {
@@ -222,15 +219,15 @@ static void update_nearest(struct timeval *cand, struct timeval *current)
 void osmo_timers_prepare(void)
 {
 	struct rb_node *node;
-	struct timeval current;
+	struct timespec current;
 
-	get_time(&current);
+	osmo_timer_now(&current);
 
 	node = rb_first(&timer_root);
 	if (node) {
 		struct osmo_timer_list *this;
 		this = container_of(node, struct osmo_timer_list, node);
-		update_nearest(&this->timeout, &current);
+		update_nearest(&this->timeout_at, &current);
 	} else {
 		nearest_p = NULL;
 	}
@@ -239,19 +236,19 @@ void osmo_timers_prepare(void)
 /*! fire all timers... and remove them */
 int osmo_timers_update(void)
 {
-	struct timeval current_time;
+	struct timespec current_time;
 	struct rb_node *node;
 	struct llist_head timer_eviction_list;
 	struct osmo_timer_list *this;
 	int work = 0;
 
-	get_time(&current_time);
+	osmo_timer_now(&current_time);
 
 	INIT_LLIST_HEAD(&timer_eviction_list);
 	for (node = rb_first(&timer_root); node; node = rb_next(node)) {
 		this = container_of(node, struct osmo_timer_list, node);
 
-		if (timercmp(&this->timeout, &current_time, >))
+		if (timespeccmp(&this->timeout_at, &current_time, >))
 			break;
 
 		llist_add(&this->list, &timer_eviction_list);

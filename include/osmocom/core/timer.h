@@ -43,6 +43,7 @@
 #include <time.h>
 #include <stdbool.h>
 
+#include <osmocom/core/defs.h>
 #include <osmocom/core/linuxlist.h>
 #include <osmocom/core/linuxrbtree.h>
 
@@ -55,7 +56,7 @@
 struct osmo_timer_list {
 	struct rb_node node;	  /*!< rb-tree node header */
 	struct llist_head list;   /*!< internal list header */
-	struct timeval timeout;   /*!< expiration time */
+	struct timespec timeout_at;   /*!< expiration time */
 	unsigned int active  : 1; /*!< is it active? */
 
 	void (*cb)(void*);	  /*!< call-back called at timeout */
@@ -78,11 +79,15 @@ int osmo_timer_pending(struct osmo_timer_list *timer);
 
 int osmo_timer_remaining(const struct osmo_timer_list *timer,
 			 const struct timeval *now,
-			 struct timeval *remaining);
+			 struct timeval *remaining)
+	OSMO_DEPRECATED("using gettimeofday() for 'now' no longer works: changed to a monotonic clock.");
+
+int osmo_timer_remaining2(const struct osmo_timer_list *timer, struct timespec *remaining);
+
 /*
  * internal timer list management
  */
-struct timeval *osmo_timers_nearest(void);
+struct timespec *osmo_timers_nearest(void);
 void osmo_timers_prepare(void);
 int osmo_timers_update(void);
 int osmo_timers_check(void);
