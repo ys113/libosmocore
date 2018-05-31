@@ -39,6 +39,11 @@
 #include <osmocom/core/timer_compat.h>
 #include <osmocom/core/linuxlist.h>
 
+static int get_time(struct timeval *now)
+{
+	return osmo_gettimeofday(&now, NULL);
+}
+
 /* These store the amount of time that we wait until next timer expires. */
 static struct timeval nearest;
 static struct timeval *nearest_p;
@@ -104,7 +109,7 @@ osmo_timer_schedule(struct osmo_timer_list *timer, int seconds, int microseconds
 {
 	struct timeval current_time;
 
-	osmo_gettimeofday(&current_time, NULL);
+	get_time(&current_time);
 	timer->timeout.tv_sec = seconds;
 	timer->timeout.tv_usec = microseconds;
 	timeradd(&timer->timeout, &current_time, &timer->timeout);
@@ -162,7 +167,7 @@ int osmo_timer_remaining(const struct osmo_timer_list *timer,
 	struct timeval current_time;
 
 	if (!now)
-		osmo_gettimeofday(&current_time, NULL);
+		get_time(&current_time);
 	else
 		current_time = *now;
 
@@ -211,7 +216,7 @@ void osmo_timers_prepare(void)
 	struct rb_node *node;
 	struct timeval current;
 
-	osmo_gettimeofday(&current, NULL);
+	get_time(&current);
 
 	node = rb_first(&timer_root);
 	if (node) {
@@ -232,7 +237,7 @@ int osmo_timers_update(void)
 	struct osmo_timer_list *this;
 	int work = 0;
 
-	osmo_gettimeofday(&current_time, NULL);
+	get_time(&current_time);
 
 	INIT_LLIST_HEAD(&timer_eviction_list);
 	for (node = rb_first(&timer_root); node; node = rb_next(node)) {
