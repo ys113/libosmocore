@@ -67,6 +67,12 @@ const char *gsm0808_cell_id_list_name(const struct gsm0808_cell_id_list2 *cil);
 int gsm0808_cell_id_list_name_buf(char *buf, size_t buflen, const struct gsm0808_cell_id_list2 *cil);
 int gsm0808_cell_id_u_name(char *buf, size_t buflen,
 			   enum CELL_IDENT id_discr, const union gsm0808_cell_id_u *u);
+bool gsm0808_cell_id_u_matches(enum CELL_IDENT discr1, const union gsm0808_cell_id_u *u1,
+			       enum CELL_IDENT discr2, const union gsm0808_cell_id_u *u2);
+bool gsm0808_cell_ids_match(const struct gsm0808_cell_id *id1, const struct gsm0808_cell_id *id2);
+int gsm0808_cell_id_matches_list(const struct gsm0808_cell_id *id,
+				 const struct gsm0808_cell_id_list2 *list,
+				 unsigned int match_nr);
 
 uint8_t gsm0808_enc_aoip_trasp_addr(struct msgb *msg,
 				    const struct sockaddr_storage *ss);
