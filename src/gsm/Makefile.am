@@ -26,7 +26,7 @@ libgsmint_la_SOURCES =  a5.c rxlev_stat.c tlv_parser.c comp128.c comp128v23.c \
 			gsm0411_utils.c gsm0411_smc.c gsm0411_smr.c gsm0414.c \
 			lapd_core.c lapdm.c kasumi.c gsm_04_08_gprs.c \
 			auth_core.c auth_comp128v1.c auth_comp128v23.c \
-			auth_milenage.c milenage/aes-encblock.c gea.c \
+			auth_milenage.c auth_xor.c milenage/aes-encblock.c gea.c \
 			milenage/aes-internal.c milenage/aes-internal-enc.c \
 			milenage/milenage.c gan.c ipa.c gsm0341.c apn.c \
 			gsup.c gprs_gea.c gsm0503_conv.c oap.c gsm0808_utils.c \
