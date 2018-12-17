@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+
+doc = '''voicecall-shark: get grips on voice call MGCP and RTP'''
+
+import pyshark
+
+class LogEntry:
+	def __init__(s, p, message, obj):
+		s.p = p
+		s.message = message
+		s.obj = obj
+
+
+class HasLog:
+	def __init__(s, parent=None):
+		s.log_entries = []
+		s.parents = []
+		s.children = []
+		if parent is not None:
+			s.log_parent(parent)
+
+	def log_child(s, child):
+		s.children.append(child)
+		child.parents.append(s)
+
+	def log_parent(s, parent):
+		parent.log_child(s)
+
+	def log(s, p, message):
+		s.log_entries.append(LogEntry(p, message, s))
+
+
+class MgcpConn(HasLog):
+	def __init__(s, crcx_p, endpoint, conn_id=None):
+		endpoint.add_conn(s)
+		s.conn_id = conn_id
+		s.crcx = crcx_p
+		s.crcx_ok = None
+		s.mdcx = []
+		s.dlcx = None
+		s.dlcx_ok = None
+		super().__init__(endpoint)
+
+	def rx_verb(s, p):
+		v = p.mgcp.req_verb
+		print("VERB %r" % v)
+		if v == 'MDCX':
+			s.log(p, 'MDCX')
+			s.mdcx.append(p)
+
+		elif v == 'DLCX':
+			s.log(p, 'DLCX')
+			s.dlcx = p
+
+	def rx_verb_ok(s, p, verb_p):
+		verb = verb_p.mgcp.req_verb
+		print("VERB OK %r" % verb)
+		if verb == 'CRCX':
+			s.crcx_ok = p
+			s.conn_id = p.mgcp.param_connectionid
+			print("CRCX OK %r" % s.conn_id)
+		elif verb == 'MDCX':
+			s.mdcx.append(p)
+		elif verb == 'DLCX':
+			s.dlcx_ok = p
+	def is_open(s):
+		return s.dlcx is None
+
+	def summary(s):
+		print('%s-> %s:%s %s/%s' % (s.conn_id, s.ip, s.port, s.payload_type, s.codec))
+
+
+class MgcpEndpoint(HasLog):
+	def __init__(s, name):
+		s.name = name
+		s.conns = []
+		super().__init__()
+
+	def name_is(s, name):
+		return s.name == name
+
+	def add_conn(s, mgcp_conn):
+		s.conns.append(mgcp_conn)
+		mgcp_conn.endpoint = s
+
+	def is_open(s):
+		return any(c.is_open() for c in s.conns)
+
+	def get_conn(s, p):
+		conn_id = p.mgcp.param_connectionid
+		print('get conn_id %r' % conn_id)
+		for c in s.conns:
+			print('  conn_id %r' % c.conn_id)
+			if c.conn_id == conn_id:
+				return c
+		print('ERROR: unknown conn id %r' % conn_id)
+		return None
+
+	def summary(s):
+		print(s.name)
+		for c in s.conns:
+			print(' | %s' % c.summary())
+
+class MgcpTrans:
+	def __init__(s, p, obj):
+		s.p = p
+		s.obj = obj
+
+class CallNode(HasLog):
+	def __init__(s, ip_addr=None, port=None, codec=None, payload_type=None):
+		s.ip_addr = ip_addr
+		s.port = port
+		s.codec = codec
+		s.payload_type = payload_type
+		super().__init__()
+
+
+class CallEdge(HasLog):
+	def __init__(s, nodes=[]):
+		s.nodes = nodes
+		super().__init__()
+
+
+class CallLeg(HasLog):
+	def __init__(s):
+		self.edges = []
+		super().__init__()
+
+	def add_edge(s, edge):
+		self.edges.append(edge)
+		s.log_child(edge)
+
+
+class Results:
+	def __init__(s, call_legs = []):
+		s.call_legs = call_legs
+		s.mgcp_endpoints = []
+		s.mgcp_transactions = []
+
+	def mgcp_trans_new(s, p, obj):
+		s.mgcp_transactions.append(MgcpTrans(p, obj))
+
+	def mgcp_trans_res(s, p):
+		for t in s.mgcp_transactions:
+			if t.p.mgcp.transid == p.mgcp.transid:
+				o = t.obj
+				s.mgcp_transactions.remove(t)
+				return t
+
+	def new_endpoint(s, p):
+		ep = MgcpEndpoint(p.mgcp.req_endpoint)
+		s.mgcp_endpoints.append(ep)
+		return ep
+
+	def find_endpoint(s, endpoint, still_open=False):
+		for ep in s.mgcp_endpoints:
+			if not ep.name_is(endpoint):
+				continue
+			if still_open and not ep.is_open():
+				continue
+			return ep
+
+	def process_mgcp(s, p):
+		m = p.mgcp
+		print('----')
+		print(p.pretty_print())
+		print(p.mgcp.field_names)
+
+		if 'req_verb' in m.field_names:
+			v = m.req_verb
+			ep = None
+			ci = None
+
+			if v == 'CRCX':
+				# does the endpoint exist?
+				if '*' not in m.req_endpoint:
+					ep = s.find_endpoint(m.req_endpoint, True)
+
+				if ep is None:
+					ep = s.new_endpoint(p)
+
+				ci = MgcpConn(p, ep)
+			else:
+				ep = s.find_endpoint(m.req_endpoint, True)
+				print('VERB ep %r' % ep.name)
+				ci = ep.get_conn(p)
+				ci.rx_verb(p)
+
+			s.mgcp_trans_new(p, ci)
+			return
+
+		if 'rsp' in m.field_names:
+			t = s.mgcp_trans_res(p)
+			ci = t.obj
+			ci.rx_verb_ok(p, t.p)
+
+	def process_cap(s, cap):
+		for p in cap:
+			if hasattr(p, 'mgcp'):
+				s.process_mgcp(p)
+
+	def process_file(s, path):
+		print(repr(path))
+		cap = pyshark.FileCapture(path)
+		s.process_cap(cap)
+
+	def summary(s):
+
+		print('mgcp endpoints: %d' % len(s.mgcp_endpoints))
+
+
+def parse_args():
+	import argparse
+	parser = argparse.ArgumentParser(description=doc)
+	parser.add_argument('--pcap-file', '-f')
+	return parser.parse_args()
+
+if __name__ == '__main__':
+	opts = parse_args()
+
+	r = Results()
+	r.process_file(opts.pcap_file)
+	print(r.summary())
