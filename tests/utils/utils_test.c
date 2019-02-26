@@ -1022,6 +1022,115 @@ void strbuf_test()
 	printf("(need %d chars, had size=63) %s\n", rc, buf);
 }
 
+static void string_ringbuf_test_print_pos(struct osmo_string_ringbuffer *b, char *pos, const char* label)
+{
+	int i;
+	const char *marker = "^";
+	if (pos < b->buf) {
+		pos = b->buf;
+		marker = "<-";
+	}
+	if (pos > b->buf + b->buf_size) {
+		pos = b->buf + b->buf_size + 5;
+		marker = "->";
+	}
+	for (i = 0; i < (pos - b->buf); i++)
+		printf(" ");
+	printf("       " "%s%s\n", marker, label);
+}
+
+void string_ringbuf_test_get(struct osmo_string_ringbuffer *b, size_t len)
+{
+	char *ret = osmo_string_ringbuffer_get(b, len);
+	int i;
+	static char marker = 'a';
+	printf("osmo_string_ringbuffer_get(%2zu) -> ", len);
+	if (!ret)
+		printf("NULL");
+	else {
+
+		printf("buf[%zu]", ret - b->buf);
+		for (i = 0; i < len; i++)
+			ret[i] = marker;
+	}
+	printf("\n");
+
+	printf("buf = [");
+	for (i = 0; i < b->buf_size; i++)
+		printf("%c", b->buf[i]? : '_');
+	printf("]\n");
+	string_ringbuf_test_print_pos(b, b->next, "next");
+	for (i = b->recent_len-1; i >= 0; i--)
+		string_ringbuf_test_print_pos(b, b->recent[i], "recent");
+	printf("avail = %zu\n", osmo_string_ringbuffer_avail(b));
+
+	marker++;
+	if (marker > 'z')
+		marker = 'a';
+}
+
+void string_ringbuf_test()
+{
+	char buf[23] = {};
+	char *recent[3] = {};
+	struct osmo_string_ringbuffer _b = {
+		.buf = buf,
+		.buf_size = sizeof(buf),
+		.recent = recent,
+		.recent_len = ARRAY_SIZE(recent),
+	};
+	struct osmo_string_ringbuffer *b = &_b;
+
+#define CLEAR \
+	memset(buf, 0, sizeof(buf)); \
+	osmo_string_ringbuffer_clear(b);
+
+	int i;
+
+
+	printf("\n\n%s\n", __func__);
+
+	printf("\n*** Test continuous small buffers\n");
+	for (i = 0; i < 26; i++)
+		string_ringbuf_test_get(b, i&1? 5 : 3);
+
+	printf("\n*** Test exact use\n");
+	CLEAR
+	string_ringbuf_test_get(b, 5);
+	string_ringbuf_test_get(b, 5);
+	string_ringbuf_test_get(b, 10);
+	string_ringbuf_test_get(b, 3);
+	string_ringbuf_test_get(b, 5);
+	string_ringbuf_test_get(b, 5);
+	string_ringbuf_test_get(b, 10);
+	string_ringbuf_test_get(b, 3);
+
+	printf("\n*** Test deadlock\n");
+	CLEAR
+	string_ringbuf_test_get(b, 5);
+	string_ringbuf_test_get(b, 15);
+	string_ringbuf_test_get(b, 3);
+	string_ringbuf_test_get(b, 1);
+	string_ringbuf_test_get(b, 1);
+
+	printf("\n*** Test deadlock (2)\n");
+	CLEAR
+	string_ringbuf_test_get(b, 23);
+	string_ringbuf_test_get(b, 1);
+	string_ringbuf_test_get(b, 1);
+
+	printf("\n*** Test bounds checking: available size\n");
+	CLEAR
+	string_ringbuf_test_get(b, 30);
+	string_ringbuf_test_get(b, 10);
+	string_ringbuf_test_get(b, 10);
+	string_ringbuf_test_get(b, 4);
+
+	printf("\nTest bounds checking: invalid args\n");
+	string_ringbuf_test_get(b, 0);
+	OSMO_ASSERT(osmo_string_ringbuffer_get(NULL, 10) == NULL);
+}
+
 int main(int argc, char **argv)
 {
 	static const struct log_info log_info = {};
@@ -1040,5 +1149,6 @@ int main(int argc, char **argv)
 	osmo_sockaddr_to_str_and_uint_test();
 	osmo_str_tolowupper_test();
 	strbuf_test();
+	string_ringbuf_test();
 	return 0;
 }

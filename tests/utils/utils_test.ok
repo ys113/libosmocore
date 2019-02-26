@@ -342,3 +342,347 @@ cascade:
 (need 134 chars)
 T minus 10 9 8 7 6 5 4 3 2 1 ... Lift off! -- T minus 10 9 8 7 6 5 4 3 2 1 ... Lift off! -- T minus 10 9 8 7 6 5 4 3 2 1 ... Lift off!
 (need 134 chars, had size=63) T minus 10 9 8 7 6 5 4 3 2 1 ... Lift off! -- T minus 10 9 8 7
+
+
+string_ringbuf_test
+
+*** Test continuous small buffers
+osmo_string_ringbuffer_get( 3) -> buf[0]
+buf = [aaa____________________]
+          ^next
+       <-recent
+       <-recent
+       ^recent
+avail = 20
+osmo_string_ringbuffer_get( 5) -> buf[3]
+buf = [aaabbbbb_______________]
+               ^next
+       <-recent
+          ^recent
+       ^recent
+avail = 15
+osmo_string_ringbuffer_get( 3) -> buf[8]
+buf = [aaabbbbbccc____________]
+                  ^next
+               ^recent
+          ^recent
+       ^recent
+avail = 12
+osmo_string_ringbuffer_get( 5) -> buf[11]
+buf = [aaabbbbbcccddddd_______]
+                       ^next
+                  ^recent
+               ^recent
+          ^recent
+avail = 7
+osmo_string_ringbuffer_get( 3) -> buf[16]
+buf = [aaabbbbbcccdddddeee____]
+                          ^next
+                       ^recent
+                  ^recent
+               ^recent
+avail = 8
+osmo_string_ringbuffer_get( 5) -> buf[0]
+buf = [fffffbbbcccdddddeee____]
+            ^next
+       ^recent
+                       ^recent
+                  ^recent
+avail = 6
+osmo_string_ringbuffer_get( 3) -> buf[5]
+buf = [fffffgggcccdddddeee____]
+               ^next
+            ^recent
+       ^recent
+                       ^recent
+avail = 8
+osmo_string_ringbuffer_get( 5) -> buf[8]
+buf = [fffffggghhhhhdddeee____]
+                    ^next
+               ^recent
+            ^recent
+       ^recent
+avail = 10
+osmo_string_ringbuffer_get( 3) -> buf[13]
+buf = [fffffggghhhhhiiieee____]
+                       ^next
+                    ^recent
+               ^recent
+            ^recent
+avail = 7
+osmo_string_ringbuffer_get( 5) -> buf[16]
+buf = [fffffggghhhhhiiijjjjj__]
+                            ^next
+                       ^recent
+                    ^recent
+               ^recent
+avail = 8
+osmo_string_ringbuffer_get( 3) -> buf[0]
+buf = [kkkffggghhhhhiiijjjjj__]
+          ^next
+       ^recent
+                       ^recent
+                    ^recent
+avail = 10
+osmo_string_ringbuffer_get( 5) -> buf[3]
+buf = [kkklllllhhhhhiiijjjjj__]
+               ^next
+          ^recent
+       ^recent
+                       ^recent
+avail = 8
+osmo_string_ringbuffer_get( 3) -> buf[8]
+buf = [kkklllllmmmhhiiijjjjj__]
+                  ^next
+               ^recent
+          ^recent
+       ^recent
+avail = 12
+osmo_string_ringbuffer_get( 5) -> buf[11]
+buf = [kkklllllmmmnnnnnjjjjj__]
+                       ^next
+                  ^recent
+               ^recent
+          ^recent
+avail = 7
+osmo_string_ringbuffer_get( 3) -> buf[16]
+buf = [kkklllllmmmnnnnnooojj__]
+                          ^next
+                       ^recent
+                  ^recent
+               ^recent
+avail = 8
+osmo_string_ringbuffer_get( 5) -> buf[0]
+buf = [ppppplllmmmnnnnnooojj__]
+            ^next
+       ^recent
+                       ^recent
+                  ^recent
+avail = 6
+osmo_string_ringbuffer_get( 3) -> buf[5]
+buf = [pppppqqqmmmnnnnnooojj__]
+               ^next
+            ^recent
+       ^recent
+                       ^recent
+avail = 8
+osmo_string_ringbuffer_get( 5) -> buf[8]
+buf = [pppppqqqrrrrrnnnooojj__]
+                    ^next
+               ^recent
+            ^recent
+       ^recent
+avail = 10
+osmo_string_ringbuffer_get( 3) -> buf[13]
+buf = [pppppqqqrrrrrsssooojj__]
+                       ^next
+                    ^recent
+               ^recent
+            ^recent
+avail = 7
+osmo_string_ringbuffer_get( 5) -> buf[16]
+buf = [pppppqqqrrrrrsssttttt__]
+                            ^next
+                       ^recent
+                    ^recent
+               ^recent
+avail = 8
+osmo_string_ringbuffer_get( 3) -> buf[0]
+buf = [uuuppqqqrrrrrsssttttt__]
+          ^next
+       ^recent
+                       ^recent
+                    ^recent
+avail = 10
+osmo_string_ringbuffer_get( 5) -> buf[3]
+buf = [uuuvvvvvrrrrrsssttttt__]
+               ^next
+          ^recent
+       ^recent
+                       ^recent
+avail = 8
+osmo_string_ringbuffer_get( 3) -> buf[8]
+buf = [uuuvvvvvwwwrrsssttttt__]
+                  ^next
+               ^recent
+          ^recent
+       ^recent
+avail = 12
+osmo_string_ringbuffer_get( 5) -> buf[11]
+buf = [uuuvvvvvwwwxxxxxttttt__]
+                       ^next
+                  ^recent
+               ^recent
+          ^recent
+avail = 7
+osmo_string_ringbuffer_get( 3) -> buf[16]
+buf = [uuuvvvvvwwwxxxxxyyytt__]
+                          ^next
+                       ^recent
+                  ^recent
+               ^recent
+avail = 8
+osmo_string_ringbuffer_get( 5) -> buf[0]
+buf = [zzzzzvvvwwwxxxxxyyytt__]
+            ^next
+       ^recent
+                       ^recent
+                  ^recent
+avail = 6
+
+*** Test exact use
+osmo_string_ringbuffer_get( 5) -> buf[0]
+buf = [aaaaa__________________]
+            ^next
+       <-recent
+       <-recent
+       ^recent
+avail = 18
+osmo_string_ringbuffer_get( 5) -> buf[5]
+buf = [aaaaabbbbb_____________]
+                 ^next
+       <-recent
+            ^recent
+       ^recent
+avail = 13
+osmo_string_ringbuffer_get(10) -> buf[10]
+buf = [aaaaabbbbbcccccccccc___]
+                           ^next
+                 ^recent
+            ^recent
+       ^recent
+avail = 3
+osmo_string_ringbuffer_get( 3) -> buf[20]
+buf = [aaaaabbbbbccccccccccddd]
+                              ^next
+                           ^recent
+                 ^recent
+            ^recent
+avail = 5
+osmo_string_ringbuffer_get( 5) -> buf[0]
+buf = [eeeeebbbbbccccccccccddd]
+            ^next
+       ^recent
+                           ^recent
+                 ^recent
+avail = 5
+osmo_string_ringbuffer_get( 5) -> buf[5]
+buf = [eeeeefffffccccccccccddd]
+                 ^next
+            ^recent
+       ^recent
+                           ^recent
+avail = 10
+osmo_string_ringbuffer_get(10) -> buf[10]
+buf = [eeeeefffffggggggggggddd]
+                           ^next
+                 ^recent
+            ^recent
+       ^recent
+avail = 3
+osmo_string_ringbuffer_get( 3) -> buf[20]
+buf = [eeeeefffffgggggggggghhh]
+                              ^next
+                           ^recent
+                 ^recent
+            ^recent
+avail = 5
+
+*** Test deadlock
+osmo_string_ringbuffer_get( 5) -> buf[0]
+buf = [iiiii__________________]
+            ^next
+       <-recent
+       <-recent
+       ^recent
+avail = 18
+osmo_string_ringbuffer_get(15) -> buf[5]
+buf = [iiiiijjjjjjjjjjjjjjj___]
+                           ^next
+       <-recent
+            ^recent
+       ^recent
+avail = 3
+osmo_string_ringbuffer_get( 3) -> buf[20]
+buf = [iiiiijjjjjjjjjjjjjjjkkk]
+                              ^next
+                           ^recent
+            ^recent
+       ^recent
+avail = 0
+osmo_string_ringbuffer_get( 1) -> NULL
+buf = [iiiiijjjjjjjjjjjjjjjkkk]
+                              ^next
+                           ^recent
+            ^recent
+       ^recent
+avail = 0
+osmo_string_ringbuffer_get( 1) -> NULL
+buf = [iiiiijjjjjjjjjjjjjjjkkk]
+                              ^next
+                           ^recent
+            ^recent
+       ^recent
+avail = 0
+
+*** Test deadlock (2)
+osmo_string_ringbuffer_get(23) -> buf[0]
+buf = [nnnnnnnnnnnnnnnnnnnnnnn]
+                              ^next
+       <-recent
+       <-recent
+       ^recent
+avail = 0
+osmo_string_ringbuffer_get( 1) -> NULL
+buf = [nnnnnnnnnnnnnnnnnnnnnnn]
+                              ^next
+       <-recent
+       <-recent
+       ^recent
+avail = 0
+osmo_string_ringbuffer_get( 1) -> NULL
+buf = [nnnnnnnnnnnnnnnnnnnnnnn]
+                              ^next
+       <-recent
+       <-recent
+       ^recent
+avail = 0
+
+*** Test bounds checking: available size
+osmo_string_ringbuffer_get(30) -> NULL
+buf = [_______________________]
+       <-next
+       <-recent
+       <-recent
+       <-recent
+avail = 23
+osmo_string_ringbuffer_get(10) -> buf[0]
+buf = [rrrrrrrrrr_____________]
+                 ^next
+       <-recent
+       <-recent
+       ^recent
+avail = 13
+osmo_string_ringbuffer_get(10) -> buf[10]
+buf = [rrrrrrrrrrssssssssss___]
+                           ^next
+       <-recent
+                 ^recent
+       ^recent
+avail = 3
+osmo_string_ringbuffer_get( 4) -> NULL
+buf = [rrrrrrrrrrssssssssss___]
+                           ^next
+       <-recent
+                 ^recent
+       ^recent
+avail = 3
+
+Test bounds checking: invalid args
+osmo_string_ringbuffer_get( 0) -> NULL
+buf = [rrrrrrrrrrssssssssss___]
+                           ^next
+       <-recent
+                 ^recent
+       ^recent
+avail = 3

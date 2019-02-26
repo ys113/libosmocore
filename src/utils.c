@@ -826,4 +826,160 @@ const char osmo_luhn(const char* in, int in_len)
 	return (sum * 9) % 10 + '0';
 }
 
+/*! Return section from a string ringbuffer that is currently considered unused.
+ * \param[in] buf  osmo_string_ringbuffer instance.
+ * \param[in] bufsize  The amount of bytes that should be available, caller needs to include terminating nul.
+ * \returns Pointer to string buffer, or NULL if there is not enough unused memory available in osmo_static_string_buf.
+ */
+char *osmo_string_ringbuffer_get(struct osmo_string_ringbuffer *buf, size_t bufsize)
+{
+	char *ret;
+	int i;
+
+	if (!bufsize || !buf)
+		return NULL;
+
+	if (bufsize > buf->buf_size)
+		return NULL;
+
+	ret = buf->next;
+	if (ret < buf->buf
+	    || ret + bufsize > buf->buf + buf->buf_size)
+		ret = buf->buf;
+
+	if (buf->recent) {
+		if (ret <= buf->recent[0]
+		    && bufsize > buf->recent[0] - ret)
+			return NULL;
+
+		/* Record used chunk in list of recent buffers */
+		for (i = 0; i < buf->recent_len; i++) {
+			if (!buf->recent[i])
+				break;
+		}
+
+		if (i < buf->recent_len)
+			buf->recent[i] = ret;
+		else {
+			if (buf->recent_len > 1)
+				memmove(&buf->recent[0], &buf->recent[1], (buf->recent_len - 1) *
+					sizeof(buf->recent[0]));
+			buf->recent[buf->recent_len - 1] = ret;
+		}
+	}
+
+	buf->next = ret + bufsize;
+
+	return ret;
+}
+
+/*! Reset string ringbuffer to make all of its space available.
+ * This can be useful to mark a buffer as unused, e.g. to recover from a full buffer, or before and after the caller
+ * would like to allocate an unusually large buffer. All previously allocated pointers gotten by
+ * osmo_string_ringbuffer_get() for this ring buffer must no longer be used. */
+void osmo_string_ringbuffer_clear(struct osmo_string_ringbuffer *buf)
+{
+	if (buf->recent && buf->recent_len)
+		memset(buf->recent, 0, buf->recent_len * sizeof(buf->recent[0]));
+	buf->next = NULL;
+}
+
+/*! Return the largest amount of bytes that could be allocated at this point in time.
+ * \param[in] buf  osmo_string_ringbuffer instance.
+ * \returns Size of largest continuous chunk of bytes available.
+ */
+size_t osmo_string_ringbuffer_avail(struct osmo_string_ringbuffer *buf)
+{
+	char *pos = buf->next;
+	if (pos < buf->buf || pos > buf->buf + buf->buf_size)
+		pos = buf->buf;
+	if (buf->recent && buf->recent[0]) {
+		if (pos <= buf->recent[0])
+			return buf->recent[0] - pos;
+
+		return OSMO_MAX(buf->buf_size - (pos - buf->buf),
+				buf->recent[0] - buf->buf);
+	}
+	return buf->buf_size - (pos - buf->buf);
+}
+
+/*! Re-use static string ring buffer not before five osmo_static_string() calls have occured. */
+static char *default_string_buf_recent[5] = {};
+
+/*! Currently, the largest requested size within libosmocore is 4100 bytes (msgb_hexdump()), allow for enough space so
+ * that it can be called any number of times in a row without hitting the recent[] check. To guarantee N untouched
+ * previous buffers, there has to be space for N+1 buffers. However, a fragmented offset may lead to needing N+2. */
+static char default_string_buf_storage[4100 * (ARRAY_SIZE(default_string_buf_recent) + 2)];
+
+struct osmo_string_ringbuffer osmo_static_string_buf_default = {
+	.buf = default_string_buf_storage,
+	.buf_size = sizeof(default_string_buf_storage),
+	.recent = default_string_buf_recent,
+	.recent_len = ARRAY_SIZE(default_string_buf_recent),
+};
+
+struct osmo_string_ringbuffer *osmo_static_string_buf = &osmo_static_string_buf_default;
+
+/*! Return a static string buffer that can hold the given string length plus an additional nul character, or abort the
+ * program if no buffer is available.
+ *
+ * The idea is to provide distinct string buffers for various osmo_xxx_name() API implementations, so that the same
+ * osmo_xxx_name() function can be used multiple times in the same print format arguments.
+ *
+ * Use osmo_static_string_buf, which can be redirected by the caller to a larger buffer, if required.  By default,
+ * osmo_static_string_buf points at osmo_static_string_buf_default, so that no initialization is necessary by the
+ * caller.
+ *
+ * It is the responsibility of the caller to ensure that enough string buffer space is available. If insufficient space
+ * is detected, abort the program using OSMO_ASSERT(false).
+ *
+ * Insufficient space is detected by considering the last N allocations as still used. Depending on the amount of bytes
+ * reserved each time, there can in practice be many more than N allocations without overlapping. If, for example,
+ * osmo_static_string_buf is configured to guarantee 5 allocations of 4100 bytes each without overlaps, that would also
+ * allow for 50 non-overlapping allocations of 410 bytes each. Hence this mechanism merely ensures basic sanity, so that
+ * the caller can at all times be sure that at least 5 concurrent allocations will succeed, and will receive a program
+ * error otherwise.
+ *
+ * \param bufsize  The amount of bytes that should be available, caller needs to include terminating nul.
+ * \returns Pointer to string buffer.
+ */
+char *osmo_static_string(size_t bufsize)
+{
+	char *ret = osmo_string_ringbuffer_get(osmo_static_string_buf, bufsize);
+	/* If we're going to assert because of no more static strings being available, print out a status to stderr
+	 * first. */
+	if (!ret) {
+		int i;
+		fprintf(stderr, "\n\n"
+			"*** Static ringbuffer full:\n"
+			"  avail = %zu\n"
+			"  requested %zu\n"
+			"  size = %zu\n",
+			osmo_string_ringbuffer_avail(osmo_static_string_buf),
+			bufsize,
+			osmo_static_string_buf->buf_size);
+
+#define PRINT_IDX(val, label_fmt, label_args...) \
+		if (osmo_static_string_buf->val >= osmo_static_string_buf->buf \
+		    && osmo_static_string_buf->val <= (osmo_static_string_buf->buf + osmo_static_string_buf->buf_size)) \
+			fprintf(stderr, "  [%zu] " label_fmt "\n", \
+				osmo_static_string_buf->val - osmo_static_string_buf->buf, ## label_args); \
+		else \
+			fprintf(stderr, "  " label_fmt " out of bounds\n", ## label_args);
+
+		PRINT_IDX(next, "next");
+		if (osmo_static_string_buf->recent) {
+			for (i = 0; i < osmo_static_string_buf->recent_len; i++) {
+				if (!osmo_static_string_buf->recent[i])
+					continue;
+				PRINT_IDX(recent[i], "recent[%d]", i);
+			}
+		}
+
+#undef PRINT_IDX
+	}
+	OSMO_ASSERT(ret);
+	return ret;
+}
+
 /*! @} */

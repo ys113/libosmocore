@@ -230,4 +230,33 @@ struct osmo_strbuf {
 #define OSMO_STRBUF_PRINTF(STRBUF, fmt, args...) \
 	OSMO_STRBUF_APPEND(STRBUF, snprintf, fmt, ##args)
 
+/*! State for managing a ringbuffer of static strings. See osmo_static_string(). */
+struct osmo_string_ringbuffer {
+	/*! Start of the usable memory. */
+	char *buf;
+	/*! Size of the usable memory. */
+	size_t buf_size;
+	/*! Pointer to after the last used static string. */
+	char *next;
+	/*! Most recent usages, for sanity checking. If not NULL, should point to an array of char*[recent_len]. */
+	char **recent;
+	/*! Number of recent usages that is considered as still in use. */
+	size_t recent_len;
+};
+
+char *osmo_string_ringbuffer_get(struct osmo_string_ringbuffer *buf, size_t bufsize);
+size_t osmo_string_ringbuffer_avail(struct osmo_string_ringbuffer *buf);
+void osmo_string_ringbuffer_clear(struct osmo_string_ringbuffer *buf);
+
+char *osmo_static_string(size_t bufsize);
+
+/*! Useful to pass osmo_static_string() and size arguments without repeating the size.
+ *
+ *     printf("%s\n", osmo_hexdump_buf(OSMO_STATIC_STRING(my_data_len*2), my_data, my_data_len, NULL, false));
+ */
+#define OSMO_STATIC_STRING(SIZE) osmo_static_string(SIZE), (SIZE)
+
+extern struct osmo_string_ringbuffer osmo_static_string_buf_default;
+extern struct osmo_string_ringbuffer *osmo_static_string_buf;
+
 /*! @} */
