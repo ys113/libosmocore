@@ -1581,8 +1581,7 @@ static const char *gsm0808_cell_id_name_buf(const struct gsm0808_cell_id *cid,
  */
 const char *gsm0808_cell_id_name(const struct gsm0808_cell_id *cid)
 {
-	static char buf[64];
-	return gsm0808_cell_id_name_buf(cid, buf, sizeof(buf));
+	return gsm0808_cell_id_name_buf(cid, OSMO_STATIC_STRING(64));
 }
 
 /*! Like gsm0808_cell_id_name() but uses a different static buffer.
@@ -1591,8 +1590,7 @@ const char *gsm0808_cell_id_name(const struct gsm0808_cell_id *cid)
  */
 const char *gsm0808_cell_id_name2(const struct gsm0808_cell_id *cid)
 {
-	static char buf[64];
-	return gsm0808_cell_id_name_buf(cid, buf, sizeof(buf));
+	return gsm0808_cell_id_name(cid);
 }
 
 /*! Return a human readable representation of the Cell Identifier List, like
@@ -1640,8 +1638,9 @@ int gsm0808_cell_id_list_name_buf(char *buf, size_t buflen, const struct gsm0808
  * See also gsm0808_cell_id_list_name_buf(). */
 const char *gsm0808_cell_id_list_name(const struct gsm0808_cell_id_list2 *cil)
 {
-	static char buf[1024];
-	gsm0808_cell_id_list_name_buf(buf, sizeof(buf), cil);
+	const size_t len = 1024;
+	char *buf = osmo_static_string(len);
+	gsm0808_cell_id_list_name_buf(buf, len, cil);
 	return buf;
 }
 
@@ -1650,8 +1649,9 @@ const char *gsm0808_cell_id_list_name(const struct gsm0808_cell_id_list2 *cil)
 
 const char *gsm0808_channel_type_name(const struct gsm0808_channel_type *ct)
 {
-	static char buf[128];
-	snprintf(buf, sizeof(buf), "ch_indctr=0x%x ch_rate_type=0x%x perm_spch=%s",
+	const size_t len = 128;
+	char *buf = osmo_static_string(len);
+	snprintf(buf, len, "ch_indctr=0x%x ch_rate_type=0x%x perm_spch=%s",
 		 ct->ch_indctr, ct->ch_rate_type,
 		 osmo_hexdump(ct->perm_spch, ct->perm_spch_len));
 	return buf;

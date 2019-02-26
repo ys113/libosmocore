@@ -73,7 +73,8 @@ static inline const char *gsm0808_cell_id_discr_name(enum CELL_IDENT id_discr)
 { return get_value_string(gsm0808_cell_id_discr_names, id_discr); }
 
 const char *gsm0808_cell_id_name(const struct gsm0808_cell_id *cid);
-const char *gsm0808_cell_id_name2(const struct gsm0808_cell_id *cid);
+const char *gsm0808_cell_id_name2(const struct gsm0808_cell_id *cid)
+	OSMO_DEPRECATED("Use gsm0808_cell_id_name() instead, which now returns distinct static buffers for every invocation");
 const char *gsm0808_cell_id_list_name(const struct gsm0808_cell_id_list2 *cil);
 int gsm0808_cell_id_list_name_buf(char *buf, size_t buflen, const struct gsm0808_cell_id_list2 *cil);
 int gsm0808_cell_id_u_name(char *buf, size_t buflen,

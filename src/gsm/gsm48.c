@@ -188,8 +188,9 @@ const char *rr_cause_name(uint8_t cause)
  */
 const char *osmo_rai_name(const struct gprs_ra_id *rai)
 {
-	static char buf[32];
-	snprintf(buf, sizeof(buf), "%s-%s-%u-%u",
+	const size_t len = 32;
+	char *buf = osmo_static_string(len);
+	snprintf(buf, len, "%s-%s-%u-%u",
 		 osmo_mcc_name(rai->mcc), osmo_mnc_name(rai->mnc, rai->mnc_3_digits), rai->lac,
 		 rai->rac);
 	return buf;
@@ -440,7 +441,8 @@ const char *gsm48_mi_type_name(uint8_t mi)
  */
 const char *osmo_mi_name(const uint8_t *mi, uint8_t mi_len)
 {
-	static char mi_name[10 + GSM48_MI_SIZE + 1];
+	const size_t mi_name_len = 10 + GSM48_MI_SIZE + 1;
+	char *mi_name = osmo_static_string(mi_name_len);
 	uint8_t mi_type;
 	uint32_t tmsi;
 	char mi_string[GSM48_MI_SIZE];
@@ -452,7 +454,7 @@ const char *osmo_mi_name(const uint8_t *mi, uint8_t mi_len)
 		/* Table 10.5.4.3, reverse generate_mid_from_tmsi */
 		if (mi_len == GSM48_TMSI_LEN && mi[0] == (0xf0 | GSM_MI_TYPE_TMSI)) {
 			tmsi = osmo_load32be(&mi[1]);
-			snprintf(mi_name, sizeof(mi_name), "TMSI-0x%08" PRIX32, tmsi);
+			snprintf(mi_name, mi_name_len, "TMSI-0x%08" PRIX32, tmsi);
 			return mi_name;
 		}
 		return "TMSI-invalid";
@@ -461,7 +463,7 @@ const char *osmo_mi_name(const uint8_t *mi, uint8_t mi_len)
 	case GSM_MI_TYPE_IMEI:
 	case GSM_MI_TYPE_IMEISV:
 		osmo_bcd2str(mi_string, sizeof(mi_string), mi, 1, (mi_len * 2) - (mi[0] & GSM_MI_ODD ? 0 : 1), true);
-		snprintf(mi_name, sizeof(mi_name), "%s-%s", gsm48_mi_type_name(mi_type), mi_string);
+		snprintf(mi_name, mi_name_len, "%s-%s", gsm48_mi_type_name(mi_type), mi_string);
 		return mi_name;
 
 	default:
@@ -1059,7 +1061,8 @@ const struct value_string gsm48_nc_ss_msgtype_names[] = {
  */
 const char *gsm48_pdisc_msgtype_name(uint8_t pdisc, uint8_t msg_type)
 {
-	static char namebuf[64];
+	const size_t len = 64;
+	char *buf = osmo_static_string(len);
 	const struct value_string *msgt_names;
 
 	switch (pdisc) {
@@ -1083,9 +1086,9 @@ const char *gsm48_pdisc_msgtype_name(uint8_t pdisc, uint8_t msg_type)
 	if (msgt_names)
 		return get_value_string(msgt_names, msg_type);
 
-	snprintf(namebuf, sizeof(namebuf), "%s:0x%02x",
+	snprintf(buf, len, "%s:0x%02x",
 		 gsm48_pdisc_name(pdisc), msg_type);
-	return namebuf;
+	return buf;
 }
 
 const struct value_string gsm48_reject_value_names[] = {
@@ -1189,7 +1192,8 @@ bool osmo_gsm48_classmark_is_r99(const struct osmo_gsm48_classmark *cm)
  */
 const char *osmo_gsm48_classmark_a5_name(const struct osmo_gsm48_classmark *cm)
 {
-	static char buf[128];
+	const size_t len = 128;
+	char *buf = osmo_static_string(len);
 	char cm1[42] = "no-cm1";
 	char cm2[42] = " no-cm2";
 	char cm3[42] = " no-cm2";
@@ -1212,7 +1216,7 @@ const char *osmo_gsm48_classmark_a5_name(const struct osmo_gsm48_classmark *cm)
 			 cm->classmark3[0] & (1 << 2) ? " A5/6" : "",
 			 cm->classmark3[0] & (1 << 3) ? " A5/7" : "");
 
-	snprintf(buf, sizeof(buf), "%s%s%s", cm1, cm2, cm3);
+	snprintf(buf, len, "%s%s%s", cm1, cm2, cm3);
 	return buf;
 }
 

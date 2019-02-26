@@ -218,7 +218,7 @@ int rsl_dec_chan_nr(uint8_t chan_nr, uint8_t *type, uint8_t *subch, uint8_t *tim
 /*! Get human-readable string for RSL channel number */
 const char *rsl_chan_nr_str(uint8_t chan_nr)
 {
-	static char str[20];
+	char *str = osmo_static_string(20);
 	int ts = chan_nr & 7;
 	uint8_t cbits = chan_nr >> 3;
 

@@ -883,11 +883,12 @@ uint32_t gsm_gsmtime2fn(struct gsm_time *time)
 
 char *osmo_dump_gsmtime(const struct gsm_time *tm)
 {
-	static char buf[64];
+	const size_t len = 64;
+	char *buf = osmo_static_string(len);
 
-	snprintf(buf, sizeof(buf), "%06"PRIu32"/%02"PRIu16"/%02"PRIu8"/%02"PRIu8"/%02"PRIu8,
+	snprintf(buf, len, "%06"PRIu32"/%02"PRIu16"/%02"PRIu8"/%02"PRIu8"/%02"PRIu8,
 		 tm->fn, tm->t1, tm->t2, tm->t3, (uint8_t)tm->fn%52);
-	buf[sizeof(buf)-1] = '\0';
+	buf[len-1] = '\0';
 	return buf;
 }
 

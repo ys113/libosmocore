@@ -95,8 +95,9 @@ bool osmo_imei_str_valid(const char *imei, bool with_15th_digit)
  */
 const char *osmo_mcc_name(uint16_t mcc)
 {
-	static char buf[8];
-	snprintf(buf, sizeof(buf), "%03u", mcc);
+	const size_t len = 8;
+	char *buf = osmo_static_string(len);
+	snprintf(buf, len, "%03u", mcc);
 	return buf;
 }
 
@@ -107,8 +108,9 @@ const char *osmo_mcc_name(uint16_t mcc)
  */
 const char *osmo_mnc_name(uint16_t mnc, bool mnc_3_digits)
 {
-	static char buf[8];
-	snprintf(buf, sizeof(buf), "%0*u", mnc_3_digits ? 3 : 2, mnc);
+	const size_t len = 8;
+	char *buf = osmo_static_string(len);
+	snprintf(buf, len, "%0*u", mnc_3_digits ? 3 : 2, mnc);
 	return buf;
 }
 
@@ -124,8 +126,9 @@ static inline void plmn_name(char *buf, size_t buflen, const struct osmo_plmn_id
  */
 const char *osmo_plmn_name(const struct osmo_plmn_id *plmn)
 {
-	static char buf[16];
-	plmn_name(buf, sizeof(buf), plmn);
+	const size_t len = 16;
+	char *buf = osmo_static_string(len);
+	plmn_name(buf, len, plmn);
 	return buf;
 }
 
@@ -135,9 +138,7 @@ const char *osmo_plmn_name(const struct osmo_plmn_id *plmn)
  */
 const char *osmo_plmn_name2(const struct osmo_plmn_id *plmn)
 {
-	static char buf[16];
-	plmn_name(buf, sizeof(buf), plmn);
-	return buf;
+	return osmo_plmn_name(plmn);
 }
 
 /*! Return MCC-MNC-LAC as string, in a static buffer.
@@ -146,8 +147,9 @@ const char *osmo_plmn_name2(const struct osmo_plmn_id *plmn)
  */
 const char *osmo_lai_name(const struct osmo_location_area_id *lai)
 {
-	static char buf[32];
-	snprintf(buf, sizeof(buf), "%s-%u", osmo_plmn_name(&lai->plmn), lai->lac);
+	const size_t len = 32;
+	char *buf = osmo_static_string(len);
+	snprintf(buf, len, "%s-%u", osmo_plmn_name(&lai->plmn), lai->lac);
 	return buf;
 }
 
@@ -163,8 +165,9 @@ static const char *_cgi_name(const struct osmo_cell_global_id *cgi, char *buf, s
  */
 const char *osmo_cgi_name(const struct osmo_cell_global_id *cgi)
 {
-	static char buf[32];
-	return _cgi_name(cgi, buf, sizeof(buf));
+	const size_t len = 32;
+	char *buf = osmo_static_string(len);
+	return _cgi_name(cgi, buf, len);
 }
 
 /*! Same as osmo_cgi_name(), but uses a different static buffer.
@@ -174,8 +177,7 @@ const char *osmo_cgi_name(const struct osmo_cell_global_id *cgi)
  */
 const char *osmo_cgi_name2(const struct osmo_cell_global_id *cgi)
 {
-	static char buf[32];
-	return _cgi_name(cgi, buf, sizeof(buf));
+	return osmo_cgi_name(cgi);
 }
 
 static void to_bcd(uint8_t *bcd, uint16_t val)
@@ -189,8 +191,9 @@ static void to_bcd(uint8_t *bcd, uint16_t val)
 
 const char *osmo_gummei_name(const struct osmo_gummei *gummei)
 {
-	static char buf[32];
-	snprintf(buf, sizeof(buf), "%s-%04x-%02x", osmo_plmn_name(&gummei->plmn),
+	const size_t len = 32;
+	char *buf = osmo_static_string(len);
+	snprintf(buf, len, "%s-%04x-%02x", osmo_plmn_name(&gummei->plmn),
 		 gummei->mme.group_id, gummei->mme.code);
 	return buf;
 }

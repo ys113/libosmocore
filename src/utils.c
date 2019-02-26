@@ -41,8 +41,6 @@
  *
  * \file utils.c */
 
-static char namebuf[255];
-
 /*! get human-readable string for given value
  *  \param[in] vs Array of value_string tuples
  *  \param[in] val Value to be converted
@@ -54,12 +52,15 @@ static char namebuf[255];
  */
 const char *get_value_string(const struct value_string *vs, uint32_t val)
 {
+	char *namebuf;
+	const size_t len = 19;
 	const char *str = get_value_string_or_null(vs, val);
 	if (str)
 		return str;
 
-	snprintf(namebuf, sizeof(namebuf), "unknown 0x%"PRIx32, val);
-	namebuf[sizeof(namebuf) - 1] = '\0';
+	namebuf = osmo_static_string(len);
+	snprintf(namebuf, len, "unknown 0x%"PRIx32, val);
+	namebuf[len-1] = '\0';
 	return namebuf;
 }
 
@@ -219,7 +220,6 @@ int osmo_hexparse(const char *str, uint8_t *b, int max_len)
 	return nibblepos >> 1;
 }
 
-static char hexd_buff[4096];
 static const char hex_chars[] = "0123456789abcdef";
 
 /*! Convert binary sequence to hexadecimal ASCII string.
@@ -279,11 +279,13 @@ const char *osmo_hexdump_buf(char *out_buf, size_t out_buf_size, const unsigned 
  */
 char *osmo_ubit_dump(const uint8_t *bits, unsigned int len)
 {
+	const size_t buflen = OSMO_MIN(4096, len + 1);
+	char *buf = osmo_static_string(buflen);
 	int i;
 
-	if (len > sizeof(hexd_buff)-1)
-		len = sizeof(hexd_buff)-1;
-	memset(hexd_buff, 0, sizeof(hexd_buff));
+	if (len > buflen-1)
+		len = buflen - 1;
+	memset(buf, 0, buflen);
 
 	for (i = 0; i < len; i++) {
 		char outch;
@@ -301,10 +303,10 @@ char *osmo_ubit_dump(const uint8_t *bits, unsigned int len)
 			outch = 'E';
 			break;
 		}
-		hexd_buff[i] = outch;
+		buf[i] = outch;
 	}
-	hexd_buff[sizeof(hexd_buff)-1] = 0;
-	return hexd_buff;
+	buf[buflen-1] = 0;
+	return buf;
 }
 
 /*! Convert binary sequence to hexadecimal ASCII string
@@ -320,8 +322,9 @@ char *osmo_ubit_dump(const uint8_t *bits, unsigned int len)
  */
 char *osmo_hexdump(const unsigned char *buf, int len)
 {
-	osmo_hexdump_buf(hexd_buff, sizeof(hexd_buff), buf, len, " ", true);
-	return hexd_buff;
+	/* N bytes make 2N hex characters, plus N space delims, plus terminating nul */
+	const size_t buflen = OSMO_MIN(4096, len * (2 + 1) + 1);
+	return (char*)osmo_hexdump_buf(OSMO_STATIC_STRING(buflen), buf, len, " ", true);
 }
 
 /*! Convert binary sequence to hexadecimal ASCII string
@@ -337,8 +340,9 @@ char *osmo_hexdump(const unsigned char *buf, int len)
  */
 char *osmo_hexdump_nospc(const unsigned char *buf, int len)
 {
-	osmo_hexdump_buf(hexd_buff, sizeof(hexd_buff), buf, len, "", true);
-	return hexd_buff;
+	/* N bytes make 2N hex characters, plus terminating nul */
+	const size_t buflen = OSMO_MIN(4096, len * 2 + 1);
+	return (char*)osmo_hexdump_buf(OSMO_STATIC_STRING(buflen), buf, len, "", true);
 }
 
 /* Compat with previous typo to preserve abi */
@@ -622,7 +626,7 @@ done:
  */
 const char *osmo_escape_str(const char *str, int in_len)
 {
-	return osmo_escape_str_buf(str, in_len, namebuf, sizeof(namebuf));
+	return osmo_escape_str_buf(str, in_len, OSMO_STATIC_STRING(254));
 }
 
 /*! Like osmo_escape_str(), but returns double-quotes around a string, or "NULL" for a NULL string.
@@ -666,7 +670,7 @@ const char *osmo_quote_str_buf(const char *str, int in_len, char *buf, size_t bu
  */
 const char *osmo_quote_str(const char *str, int in_len)
 {
-	return osmo_quote_str_buf(str, in_len, namebuf, sizeof(namebuf));
+	return osmo_quote_str_buf(str, in_len, OSMO_STATIC_STRING(254));
 }
 
 /*! perform an integer square root operation on unsigned 32bit integer.
@@ -747,8 +751,9 @@ size_t osmo_str_tolower_buf(char *dest, size_t dest_len, const char *src)
  */
 const char *osmo_str_tolower(const char *src)
 {
-	static char buf[128];
-	osmo_str_tolower_buf(buf, sizeof(buf), src);
+	const size_t len = 128;
+	char *buf = osmo_static_string(len);
+	osmo_str_tolower_buf(buf, len, src);
 	return buf;
 }
 
@@ -790,8 +795,9 @@ size_t osmo_str_toupper_buf(char *dest, size_t dest_len, const char *src)
  */
 const char *osmo_str_toupper(const char *src)
 {
-	static char buf[128];
-	osmo_str_toupper_buf(buf, sizeof(buf), src);
+	const size_t len = 128;
+	char *buf = osmo_static_string(len);
+	osmo_str_toupper_buf(buf, len, src);
 	return buf;
 }
 

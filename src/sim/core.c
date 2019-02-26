@@ -267,11 +267,10 @@ struct msgb *osim_new_apdumsg(uint8_t cla, uint8_t ins, uint8_t p1,
 	return msg;
 }
 
-/* FIXME: do we want to mark this as __thread? */
-static char sw_print_buf[256];
-
 char *osim_print_sw(const struct osim_card_hdl *ch, uint16_t sw_in)
 {
+	const size_t len = 256;
+	char *buf = osmo_static_string(len);
 	const struct osim_card_sw *csw;
 
 	if (!ch || !ch->prof)
@@ -283,23 +282,23 @@ char *osim_print_sw(const struct osim_card_hdl *ch, uint16_t sw_in)
 
 	switch (csw->type) {
 	case SW_TYPE_STR:
-		snprintf(sw_print_buf, sizeof(sw_print_buf),
+		snprintf(buf, len,
 			 "%04x (%s)", sw_in, csw->u.str);
 		break;
 	default:
 		goto ret_def;
 	}
 
-	sw_print_buf[sizeof(sw_print_buf)-1] = '\0';
+	buf[len-1] = '\0';
 
-	return sw_print_buf;
+	return buf;
 
 ret_def:
-	snprintf(sw_print_buf, sizeof(sw_print_buf),
+	snprintf(buf, len,
 		 "%04x (Unknown)", sw_in);
-	sw_print_buf[sizeof(sw_print_buf)-1] = '\0';
+	buf[len-1] = '\0';
 
-	return sw_print_buf;
+	return buf;
 }
 
 

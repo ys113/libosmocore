@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <osmocom/core/utils.h>
 #include <osmocom/gsm/apn.h>
 
 #define APN_OI_GPRS_FMT	"mnc%03u.mcc%03u.gprs"
@@ -34,9 +35,11 @@ static char apn_strbuf[APN_MAXLEN+1];
 
 char *osmo_apn_qualify(unsigned int mcc, unsigned int mnc, const char *ni)
 {
-	snprintf(apn_strbuf, sizeof(apn_strbuf)-1, APN_GPRS_FMT,
+	const size_t len = APN_MAXLEN+1;
+	char *buf = osmo_static_string(len);
+	snprintf(buf, len-1, APN_GPRS_FMT,
 		ni, mnc, mcc);
-	apn_strbuf[sizeof(apn_strbuf)-1] = '\0';
+	apn_strbuf[len-1] = '\0';
 
 	return apn_strbuf;
 }

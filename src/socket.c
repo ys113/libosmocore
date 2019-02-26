@@ -822,8 +822,9 @@ int osmo_sock_get_name_buf(char *str, size_t str_len, int fd)
  */
 const char *osmo_sock_get_name2(int fd)
 {
-	static char str[OSMO_SOCK_NAME_MAXLEN];
-	osmo_sock_get_name_buf(str, sizeof(str), fd);
+	const size_t len = OSMO_SOCK_NAME_MAXLEN;
+	char *str = osmo_static_string(len);
+	osmo_sock_get_name_buf(str, len, fd);
 	return str;
 }
 
