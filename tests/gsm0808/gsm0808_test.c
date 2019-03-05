@@ -1467,7 +1467,12 @@ void test_cell_id_list_add() {
 		OSMO_ASSERT(rc == expect_rc); \
 	} while(0)
 
-#define ADD(other_cil, expect_rc) ADD_QUIET(other_cil, expect_rc); print_cil(&cil)
+#define ADD(other_cil, expect_rc) do { \
+		int rc = gsm0808_cell_id_list_add(&cil, &other_cil); \
+		printf("gsm0808_cell_id_list_add(&cil, &" #other_cil ") --> rc = %d\n", rc); \
+		print_cil(&cil); \
+		OSMO_ASSERT(rc == expect_rc); \
+	} while(0)
 
 	ADD(lac1, 1);
 	ADD(lac1, 0);

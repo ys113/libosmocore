@@ -1069,41 +1069,53 @@ int gsm0808_dec_cell_id_list(struct gsm0808_cell_id_list *cil,
 	return (int)(elem - old_elem);
 }
 
+static int osmo_gsm0808_cell_id_u_cmp(enum CELL_IDENT id_discr_a,
+				      const union gsm0808_cell_id_u *a,
+				      enum CELL_IDENT id_discr_b,
+				      const union gsm0808_cell_id_u *b)
+{
+	if (id_discr_a < id_discr_b)
+		return -1;
+	if (id_discr_a > id_discr_b)
+		return 1;
+
+#define RETURN_CMP(name) \
+	if (a->name < b->name) \
+		return -1; \
+	if (a->name > b->name) \
+		return 1
+
+	switch (id_discr_a) {
+	case CELL_IDENT_WHOLE_GLOBAL:
+		return osmo_cgi_cmp(&a->global, &b->global);
+	case CELL_IDENT_LAC_AND_CI:
+		RETURN_CMP(lac_and_ci.lac);
+		RETURN_CMP(lac_and_ci.ci);
+		return 0;
+	case CELL_IDENT_CI:
+		RETURN_CMP(ci);
+		return 0;
+	case CELL_IDENT_LAI_AND_LAC:
+		return osmo_lai_cmp(&a->lai_and_lac, &b->lai_and_lac);
+	case CELL_IDENT_LAC:
+		RETURN_CMP(lac);
+		return 0;
+	case CELL_IDENT_BSS:
+	case CELL_IDENT_NO_CELL:
+		return 0;
+	default:
+		return -1;
+	}
+#undef RETURN_CMP
+}
+
 static bool same_cell_id_list_entries(const struct gsm0808_cell_id_list2 *a, int ai,
 				      const struct gsm0808_cell_id_list2 *b, int bi)
 {
-	struct gsm0808_cell_id_list2 tmp = {
-		.id_discr = a->id_discr,
-		.id_list_len = 1,
-	};
-	uint8_t buf_a[32 + sizeof(struct msgb)];
-	uint8_t buf_b[32 + sizeof(struct msgb)];
-	struct msgb *msg_a = (void*)buf_a;
-	struct msgb *msg_b = (void*)buf_b;
-
-	msg_a->data_len = 32;
-	msg_b->data_len = 32;
-	msgb_reset(msg_a);
-	msgb_reset(msg_b);
-
-	if (a->id_discr != b->id_discr)
-		return false;
 	if (ai >= a->id_list_len
 	    || bi >= b->id_list_len)
 		return false;
-
-	tmp.id_list[0] = a->id_list[ai];
-	gsm0808_enc_cell_id_list2(msg_a, &tmp);
-
-	tmp.id_list[0] = b->id_list[bi];
-	gsm0808_enc_cell_id_list2(msg_b, &tmp);
-
-	if (msg_a->len != msg_b->len)
-		return false;
-	if (memcmp(msg_a->data, msg_b->data, msg_a->len))
-		return false;
-
-	return true;
+	return osmo_gsm0808_cell_id_u_cmp(a->id_discr, &a->id_list[ai], b->id_discr, &b->id_list[bi]) == 0;
 }
 
 /*! Append entries from one Cell Identifier List to another.
@@ -1146,6 +1158,54 @@ int gsm0808_cell_id_list_add(struct gsm0808_cell_id_list2 *dst, const struct gsm
 	}
 
 	return added;
+}
+
+static void _gsm0808_cell_id_list_del_idx(struct gsm0808_cell_id_list2 *dst, unsigned int idx)
+{
+	if (idx >= dst->id_list_len)
+		return;
+	if (dst->id_list_len > idx + 1)
+		memmove(&dst->id_list[idx], &dst->id_list[idx + 1],
+			sizeof(dst->id_list[0]) * (dst->id_list_len - (idx + 1)));
+	dst->id_list_len --;
+}
+
+int gsm0808_cell_id_list_del_cell(struct gsm0808_cell_id_list2 *dst, const struct gsm0808_cell_id *cid)
+{
+	int i;
+
+	if (dst->id_discr != cid->id_discr)
+		return 0;
+
+	for (i = 0; i < dst->id_list_len; i++) {
+		if (osmo_gsm0808_cell_id_u_cmp(cid->id_discr, &cid->id,
+					       dst->id_discr, &dst->id_list[i])) {
+			_gsm0808_cell_id_list_del_idx(dst, i);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int gsm0808_cell_id_list_del(struct gsm0808_cell_id_list2 *dst, const struct gsm0808_cell_id_list2 *src)
+{
+	int i, j;
+	int removed = 0;
+
+	if (dst->id_discr != src->id_discr)
+		return 0;
+
+	for (i = 0; i < src->id_list_len; i++) {
+		for (j = 0; j < dst->id_list_len; j++) {
+			if (same_cell_id_list_entries(dst, j, src, i)) {
+				_gsm0808_cell_id_list_del_idx(dst, j);
+				removed++;
+				j--;
+				break;
+			}
+		}
+	}
+	return removed;
 }
 
 /*! Convert a single Cell Identifier to a Cell Identifier List with one entry.
