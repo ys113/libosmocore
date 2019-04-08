@@ -1,0 +1,669 @@
+#!/usr/bin/env python3
+
+doc = '''voicecall-shark: get grips on voice call MGCP and RTP'''
+
+import pyshark
+import pprint
+
+verbose = False
+
+def vprint(*args):
+	if not verbose:
+		return
+	print(*args)
+
+def error(*args):
+	raise Exception(''.join(*args))
+
+def pget(p, *field, ifnone=None):
+	tokens = ('.'.join(field)).split('.')
+	if p is None or len(tokens) < 1:
+		return ifnone
+	first = tokens[0]
+	if not hasattr(p, first):
+		return ifnone
+	p_field = getattr(p, first)
+	if p_field is None:
+		return ifnone
+	if len(tokens) > 1:
+		return pget(p_field, *tokens[1:])
+	return p_field
+		
+
+class LogEntry:
+	def __init__(s, p, message, obj):
+		s.p = p
+		s.message = message
+		s.obj = obj
+
+
+class HasLog:
+	def __init__(s, parent=None):
+		s.log_entries = []
+		s.parents = []
+		s.children = []
+		if parent is not None:
+			s.log_parent(parent)
+
+	def log_child(s, child):
+		s.children.append(child)
+		child.parents.append(s)
+
+	def log_parent(s, parent):
+		parent.log_child(s)
+
+	def log(s, p, message):
+		s.log_entries.append(LogEntry(p, message, s))
+
+class Domino(HasLog):
+	def __init__(s, left, right, *refs):
+		s.left = left
+		s.right = right
+		s.refs = list(refs)
+		s.reversed = [ False ] * len(s.refs)
+
+	def absorb(s, domino):
+		s.refs.extend(domino.refs)
+		s.reversed.extend(domino.reversed)
+
+	def reverse(s):
+		x = s.left
+		s.left = s.right
+		s.right = x
+		s.reversed = list(map(lambda x: not x, s.reversed))
+
+	def matches(s, label):
+		if s.left == label:
+			return -1
+		if s.right == label:
+			return 1
+		return 0
+
+	def __str__(s):
+		return s.str('[','|',']')
+
+	def __repr__(s):
+		return str(s)
+
+	def str(s, left='[', mid='|', right=']', reverse=False):
+		if reverse:
+			return '%s%s%s%s%s' % (left, s.right, mid, s.left, right)
+		else:
+			return '%s%s%s%s%s' % (left, s.left, mid, s.right, right)
+
+	def __eq__(s, other):
+		o = other.str()
+		return s.str() == o or s.str(reverse=True) == o
+
+class Dominoes(HasLog):
+	def __init__(s, *pieces):
+		s.pieces = list(pieces)
+
+	def has(s, piece):
+		for p in s.pieces:
+			if p is piece:
+				return True
+		return False
+
+	def add(s, piece):
+		if s.has(piece):
+			return
+		s.pieces.append(piece)
+
+	def find_piece(s, label, in_list=None):
+		if in_list is None:
+			in_list = s.pieces
+		for piece in in_list:
+			if piece.matches(label):
+				return piece
+		return None
+
+	def find_match(s, for_piece, in_list=None):
+		if in_list is None:
+			in_list = s.pieces
+		match = s.find_piece(for_piece.left, in_list)
+		if not match:
+			match = s.find_piece(for_piece.right, in_list)
+		return match
+
+	def dedup(loose_pieces):
+		pieces = []
+		loose_pieces = list(loose_pieces)
+		while loose_pieces:
+			l = loose_pieces.pop(0)
+			for p in pieces:
+				if l == p:
+					p.absorb(l)
+					l = None
+					break
+
+			if l:
+				pieces.append(l)
+		return pieces
+
+	def arrange(loose_pieces):
+		if not loose_pieces:
+			return []
+		pieces_remain = list(loose_pieces)
+		groups = [Dominoes(pieces_remain.pop(0))]
+
+		which_end = -1
+		failed = 0
+
+		while pieces_remain:
+			which_end = 0 if which_end == -1 else -1
+			found_match = 0
+			p = None
+			for group in groups:
+				p = group.pieces[which_end]
+				match = group.find_match(p, pieces_remain)
+				if not match:
+					continue
+				if which_end == -1:
+					found_match = match.matches(p.right)
+					if found_match == 1:
+						match.reverse()
+				else:
+					found_match = match.matches(p.left)
+					if found_match == -1:
+						match.reverse()
+				if found_match:
+					break
+
+			if found_match:
+				failed = 0
+				pieces_remain.remove(match)
+				if which_end == -1:
+					group.pieces.append(match)
+				else:
+					group.pieces.insert(0, match)
+			else:
+				failed += 1
+				if failed < 2:
+					continue
+				# chain is broken. Create another group.
+				groups.append(Dominoes(pieces_remain.pop(0)))
+
+		return groups
+
+	def str(s, piece_left_edge='[', piece_mid='|', piece_right_edge=']'):
+		r = []
+		for p in s.pieces:
+			r.append(p.str(piece_left_edge, piece_mid, piece_right_edge))
+		return ''.join(r)
+
+	def __str__(s):
+		return s.str()
+
+	def chain_str(s, sep=', '):
+		if not s.pieces:
+			return ''
+		r = [s.pieces[0].left]
+		for p in s.pieces:
+			if r[-1] != p.left:
+				r.append(p.left)
+			if r[-1] != p.right:
+				r.append(p.right)
+		return sep.join(r)
+
+class RtpIpPort(HasLog):
+	def __init__(s, ip=None, port=None):
+		s.ip = ip
+		s.port = port
+	
+	def from_sdp(p):
+		ip = pget(p, 'sdp.connection_info_address')
+		port = pget(p, 'sdp.media_port')
+		return RtpIpPort(ip, port)
+
+	def from_rtp_source(p):
+		ip = pget(p, 'ip.src')
+		port = pget(p, 'udp.srcport')
+		return RtpIpPort(ip, port)
+
+	def from_rtp_dest(p):
+		ip = pget(p, 'ip.dst')
+		port = pget(p, 'udp.dstport')
+		return RtpIpPort(ip, port)
+
+	def __str__(s):
+		return '%s:%s' % (s.ip, s.port)
+
+	def __eq__(s, other):
+		return str(s) == str(other)
+
+
+class MgcpConn(HasLog):
+	def __init__(s, crcx_p, endpoint, conn_id=None):
+		s.endpoint = None
+		endpoint.add_conn(s)
+		s.conn_id = conn_id
+		s.crcx = crcx_p
+		s.crcx_ok = None
+		s.mdcx = []
+		s.dlcx = None
+		s.dlcx_ok = None
+
+		s.rtp_local = None
+		s.rtp_remote = None
+		s.payload_type = None
+		s.codec = None
+
+		s.rtp_tx = 0
+		s.rtp_tx_err = 0
+		s.rtp_rx = 0
+		s.rtp_rx_err = 0
+		super().__init__(endpoint)
+
+	def rx_verb(s, p):
+		v = p.mgcp.req_verb
+		vprint("VERB %r" % v)
+		if v == 'CRCX':
+			if hasattr(p, 'sdp'):
+				s.rtp_remote = RtpIpPort.from_sdp(p)
+		elif v == 'MDCX':
+			s.mdcx.append(p)
+			new_remote = RtpIpPort.from_sdp(p)
+			if s.rtp_remote != new_remote:
+				s.rtp_remote = RtpIpPort.from_sdp(p)
+				s.log(p, 'MDCX to %s' % new_remote)
+			else:
+				s.log(p, 'MDCX')
+					
+		elif v == 'DLCX':
+			s.log(p, 'DLCX')
+			s.dlcx = p
+
+		s.get_media(p)
+	
+	def get_media(s, p):
+		s.codec = pget(p, 'sdp.media_proto', ifnone=s.codec)
+		s.payload_type = pget(p, 'sdp.media_format', ifnone=s.payload_type)
+
+	def rx_verb_ok(s, p, verb_p):
+		verb = verb_p.mgcp.req_verb
+		vprint("VERB OK %r" % verb)
+		if verb == 'CRCX':
+			s.crcx_ok = p
+			if hasattr(p.mgcp, 'param_specificendpointid'):
+				s.endpoint.name = p.mgcp.param_specificendpointid
+			s.conn_id = p.mgcp.param_connectionid
+			s.rtp_local = RtpIpPort.from_sdp(p)
+			s.log(p, "CRCX OK")
+		elif verb == 'MDCX':
+			s.mdcx.append(p)
+			s.log(p, "MDCX OK")
+		elif verb == 'DLCX':
+			s.dlcx_ok = p
+			s.log(p, "DLCX OK")
+
+	def is_open(s):
+		return s.dlcx is None
+
+	def summary(s, remote_first=False):
+		label = ''
+		if not s.is_open():
+			label = 'DLCXd '
+		rtp1 = s.rtp_local
+		rtp2 = s.rtp_remote
+		if remote_first:
+			rtpx = rtp1
+			rtp1 = rtp2
+			rtp2 = rtpx
+		err_label = ''
+		if s.rtp_tx_err:
+			err_label = err_label + ' tx-ERR:%d' % s.rtp_tx_err
+		if s.rtp_rx_err:
+			err_label = err_label + ' rx-ERR:%d' % s.rtp_rx_err
+		return '%s%s: %s <-> %s %r %r tx:%d rx:%d' % (
+				label, s.conn_id, rtp1, rtp2, s.payload_type, s.codec, s.rtp_tx, s.rtp_rx)
+
+
+class MgcpEndpoint(HasLog):
+	def __init__(s, name):
+		s.name = name
+		s.conns = []
+		super().__init__()
+
+	def name_is(s, name):
+		return s.name == name
+
+	def add_conn(s, mgcp_conn):
+		s.conns.append(mgcp_conn)
+		mgcp_conn.endpoint = s
+
+	def is_open(s):
+		return any(c.is_open() for c in s.conns)
+
+	def get_conn(s, p):
+		conn_id = pget(p, 'mgcp.param_connectionid')
+		if not conn_id:
+			return None
+		vprint('get conn_id %r' % conn_id)
+		for c in s.conns:
+			vprint('  conn_id %r' % c.conn_id)
+			if c.conn_id == conn_id:
+				return c
+		print('ERROR: unknown conn id %r' % conn_id)
+		return None
+
+	def as_dominoes(s):
+		pieces = []
+		for i in range(len(s.conns)):
+			c = s.conns[i]
+			if not c.is_open():
+				continue
+
+			left = str(c.rtp_remote)
+			right = str(c.rtp_local)
+			pieces.append(Domino(left, right, s))
+
+			for j in range(i+1, len(s.conns)):
+				c2 = s.conns[j]
+				if not c2.is_open():
+					continue
+				left = str(c.rtp_local)
+				right = str(c2.rtp_local)
+				pieces.append(Domino(left, right, s))
+		return pieces
+
+	def reverse(s):
+		s.conns = list(reversed(s.conns))
+
+	def seen_rtp(s, src, dst):
+		handled = False
+		for c in s.conns:
+			if c.rtp_local == src:
+				handled = True
+				if c.rtp_remote == dst:
+					c.rtp_tx += 1
+				else:
+					c.rtp_tx_err += 1
+			if c.rtp_remote == src:
+				handled = True
+				if c.rtp_local == dst:
+					c.rtp_rx += 1
+				else:
+					c.rtp_rx_err += 1
+
+		return handled
+
+	def summary(s):
+		r = [s.name]
+		remote_first = True
+		for c in s.conns:
+			r.append(' | %s' % c.summary(remote_first))
+			remote_first = False
+		return '\n'.join(r)
+
+class MgcpTrans:
+	def __init__(s, p, obj):
+		s.p = p
+		s.obj = obj
+
+class RtpStream(HasLog):
+	all_rtp_streams = []
+
+	def find(rtp_ip_port):
+		for rtps in all_rtp_streams:
+			if rtps.has(rtp_ip_port):
+				return rtps
+		return None
+
+	def find_or_create(rtp_ip_ports):
+		rtps = None
+		for rtp_ip_port in rtp_ip_ports:
+			rtps = RtpStream.find(rtp_ip_port)
+			if rtps:
+				break
+		rtps.add(*rtp_ip_ports)
+		return rtps
+
+	def __init__(s, rtp_ip_ports=[]):
+		s.call_leg = None
+		s.rtp_ip_ports = rtp_ip_ports
+		s.rtp_packets_left = 0
+		s.rtp_packets_right = 0
+		super().__init__()
+
+	def has(s, rtp_ip_port):
+		for ipp in s.rtp_ip_ports:
+			if ipp == rtp_ip_port:
+				return True
+		return False
+
+	def add(s, *rtp_ip_ports):
+		for rtp_ip_port in rtp_ip_ports:
+			if s.has(rtp_ip_port):
+				continue
+			if len(s.rtp_ip_ports) > 1:
+				error('RtpStream can have only two RtpIpPorts')
+			s.rtp_ip_ports.append(rtp_ip_port)
+	
+	def reverse(s):
+		s.rtp_ip_ports = list(reversed(s.rtp_ip_ports))
+
+	def left(s):
+		if len(s.rtp_ip_ports):
+			return s.rtp_ip_ports[0]
+		return None
+
+	def right(s):
+		if len(s.rtp_ip_ports) > 1:
+			return s.rtp_ip_ports[1]
+		return None
+
+
+class CallLeg(HasLog):
+	def tie(rtp_ip_port_a, rtp_ip_port_b):
+		rtps_a = RtpStream.find(rtp_ip_port_a)
+		rtps_b = RtpStream.find(rtp_ip_port_b)
+
+
+	def __init__(s):
+		self.rtp_streams = []
+		super().__init__()
+
+	def add_rtp_stream(s, tie_to_rtp_ip_port, rtp_stream):
+		self.rtp_streams.append(rtp_stream)
+		s.log_child(edge)
+
+
+class Results:
+	def __init__(s, call_legs = []):
+		s.call_legs = call_legs
+		s.mgw_endpoints = []
+		s.mgcp_transactions = []
+		s.stray_rtp = 0
+
+	def mgcp_trans_new(s, p, obj):
+		s.mgcp_transactions.append(MgcpTrans(p, obj))
+
+	def mgcp_trans_res(s, p):
+		for t in s.mgcp_transactions:
+			if t.p.mgcp.transid == p.mgcp.transid:
+				o = t.obj
+				s.mgcp_transactions.remove(t)
+				return t
+
+	def new_endpoint(s, p):
+		ep = MgcpEndpoint(p.mgcp.req_endpoint)
+		s.mgw_endpoints.append(ep)
+		return ep
+
+	def find_endpoint(s, endpoint, still_open=False):
+		for ep in s.mgw_endpoints:
+			if not ep.name_is(endpoint):
+				continue
+			if still_open and not ep.is_open():
+				continue
+			return ep
+
+	def process_mgcp(s, p):
+		m = p.mgcp
+		if verbose:
+			print('----')
+			print(p.pretty_print())
+			print('MGCP:')
+			pprint.pprint(p.mgcp.field_names)
+			if hasattr(p, 'sdp'):
+				print('SDP:')
+				pprint.pprint(p.sdp.field_names)
+
+		ep = None
+		label = None
+
+		if 'req_verb' in m.field_names:
+			v = m.req_verb
+			label = v
+			ci = None
+
+			ep = s.find_endpoint(m.req_endpoint, True)
+			if ep is None:
+				ep = s.new_endpoint(p)
+			vprint('VERB ep %r' % ep.name)
+			if ci is None:
+				ci = ep.get_conn(p)
+			if ci is None:
+				ci = MgcpConn(p, ep)
+			ci.rx_verb(p)
+
+			s.mgcp_trans_new(p, ci)
+
+		elif 'rsp' in m.field_names:
+			t = s.mgcp_trans_res(p)
+			ci = t.obj
+			ci.rx_verb_ok(p, t.p)
+			label = '%s OK' % t.p.mgcp.req_verb
+			ep = ci.endpoint
+
+		if ep is not None:
+			print('----- %s' % label)
+			print(ep.summary())
+
+	def process_rtp(s, p):
+		src = RtpIpPort.from_rtp_source(p)
+		dst = RtpIpPort.from_rtp_dest(p)
+
+		handled = False
+		for ep in s.mgw_endpoints:
+			if ep.seen_rtp(src, dst):
+				handled = True
+
+		if not handled:
+			s.stray_rtp += 1
+			print("Stray RTP: %s -> %s" % (src, dst))
+
+
+	def process_cap(s, cap):
+		last_time = None
+		refresh = False
+		last_stray_rtp = 0
+		for p in cap:
+			if hasattr(p, 'mgcp'):
+				s.process_mgcp(p)
+				refresh = True
+
+			if hasattr(p, 'rtp'):
+				s.process_rtp(p)
+
+			if hasattr(p, 'udp'):
+				time = float(pget(p, 'udp.time_relative', ifnone='0'))
+				if last_time is None or time > last_time + 1:
+					last_time = time
+					refresh = True
+
+			if refresh:
+				refresh = False
+				s.correlate_endpoints()
+				if last_stray_rtp != s.stray_rtp:
+					print('stray_rtp: %d' % (s.stray_rtp - last_stray_rtp))
+					last_stray_rtp = s.stray_rtp
+				print(time)
+
+
+
+
+	def correlate_endpoints(s):
+		pieces = []
+		for ep in s.mgw_endpoints:
+			pieces.extend(ep.as_dominoes())
+		groups = Dominoes.arrange(Dominoes.dedup(pieces))
+
+		i = 0
+		for g in groups:
+			i += 1
+			print('\n--- Call chain %d' % i)
+			print(g.chain_str('<->'))
+
+			endp_chain = []
+			for piece in g.pieces:
+				for i in range(len(piece.refs)):
+					ref = piece.refs[i]
+					reversd = piece.reversed[i]
+					if type(ref) is not MgcpEndpoint:
+						continue
+					if ref in endp_chain:
+						continue
+					endp_chain.append(ref)
+
+			prev_rtp = g.pieces[0].left
+			for ep in endp_chain:
+				if not len(ep.conns):
+					continue
+				if str(ep.conns[0].rtp_remote) != prev_rtp:
+					ep.reverse()
+				print(ep.summary())
+				prev_rtp = str(ep.conns[-1].rtp_local)
+
+		print('\n')
+
+	def process_file(s, path):
+		vprint(repr(path))
+		cap = pyshark.FileCapture(path)
+		s.process_cap(cap)
+
+	def summary(s):
+		r = []
+		still_open = 0
+
+		for ep in s.mgw_endpoints:
+			if not ep.is_open():
+				continue
+			r.append(ep.summary())
+			still_open += 1
+		r.append('open mgcp endpoints: %d' % still_open)
+		return '\n'.join(r)
+
+
+def parse_args():
+	import argparse
+	parser = argparse.ArgumentParser(description=doc)
+	parser.add_argument('--pcap-file', '-f')
+	return parser.parse_args()
+
+def dominoes_test():
+
+	d = [
+	Domino('hat', 'hut'),
+	Domino('ape', 'dog'),
+	Domino('moo', 'foo'),
+	Domino('cat', 'dog'),
+	Domino('ape', 'cow'),
+	Domino('axe', 'hop'),
+	Domino('hat', 'cat'),
+	Domino('moo', 'foo'),
+	Domino('axe', 'bin'),
+	Domino('axe', 'dog'),
+	]
+	groups = Dominoes.arrange(d)
+
+	for g in groups:
+		print(str(g))
+
+if __name__ == '__main__':
+	opts = parse_args()
+
+	r = Results()
+	r.process_file(opts.pcap_file)
+	print(r.summary())
